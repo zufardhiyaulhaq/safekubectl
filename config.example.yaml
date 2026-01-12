@@ -1,0 +1,34 @@
+# safekubectl configuration
+# Copy this file to ~/.safekubectl/config.yaml
+
+# Mode: "confirm" (require y/N) or "warn-only" (display warning and proceed)
+mode: confirm
+
+# Operations considered dangerous
+dangerousOperations:
+  - delete
+  - apply
+  - patch
+  - edit
+  - update
+  - rollout
+  - drain
+  - exec
+  - cordon
+  - taint
+
+# Namespaces that always require confirmation regardless of mode
+protectedNamespaces:
+  - kube-system
+  - production
+  - prod
+
+# Clusters/contexts that always require confirmation regardless of mode
+protectedClusters:
+  - prod-us-east-1
+  - prod-eu-west-1
+
+# Audit logging configuration
+audit:
+  enabled: false
+  path: ~/.safekubectl/audit.log
