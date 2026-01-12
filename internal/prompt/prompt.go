@@ -27,7 +27,10 @@ func DisplayWarningTo(w io.Writer, result *checker.CheckResult) {
 	fmt.Fprintf(w, "%s%s  DANGEROUS OPERATION DETECTED%s\n", colorYellow, warningIcon(), colorReset)
 	fmt.Fprintf(w, "├── Operation: %s%s%s\n", colorRed, result.Operation, colorReset)
 	fmt.Fprintf(w, "├── Resource:  %s\n", result.Resource)
-	fmt.Fprintf(w, "├── Namespace: %s\n", result.Namespace)
+	// Don't show namespace for node-scoped operations (cordon, uncordon, drain, taint)
+	if !result.IsNodeScoped {
+		fmt.Fprintf(w, "├── Namespace: %s\n", result.Namespace)
+	}
 	fmt.Fprintf(w, "└── Cluster:   %s\n", result.Cluster)
 	fmt.Fprintln(w)
 }

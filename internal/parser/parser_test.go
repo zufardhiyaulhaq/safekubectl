@@ -19,6 +19,7 @@ func TestParse(t *testing.T) {
 				Resource:  "pod",
 				Name:      "nginx",
 				Namespace: "",
+				Context:   "",
 				Args:      []string{"delete", "pod", "nginx"},
 			},
 		},
@@ -232,14 +233,51 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "with context flag",
+			name: "with context flag before operation",
 			args: []string{"--context", "prod-cluster", "delete", "pod", "nginx"},
 			expected: &KubectlCommand{
 				Operation: "delete",
 				Resource:  "pod",
 				Name:      "nginx",
 				Namespace: "",
+				Context:   "prod-cluster",
 				Args:      []string{"--context", "prod-cluster", "delete", "pod", "nginx"},
+			},
+		},
+		{
+			name: "with context flag after operation",
+			args: []string{"delete", "pod", "nginx", "--context", "prod-cluster"},
+			expected: &KubectlCommand{
+				Operation: "delete",
+				Resource:  "pod",
+				Name:      "nginx",
+				Namespace: "",
+				Context:   "prod-cluster",
+				Args:      []string{"delete", "pod", "nginx", "--context", "prod-cluster"},
+			},
+		},
+		{
+			name: "with context= flag",
+			args: []string{"delete", "pod", "nginx", "--context=prod-cluster"},
+			expected: &KubectlCommand{
+				Operation: "delete",
+				Resource:  "pod",
+				Name:      "nginx",
+				Namespace: "",
+				Context:   "prod-cluster",
+				Args:      []string{"delete", "pod", "nginx", "--context=prod-cluster"},
+			},
+		},
+		{
+			name: "with context and namespace",
+			args: []string{"delete", "pod", "nginx", "-n", "production", "--context", "prod-cluster"},
+			expected: &KubectlCommand{
+				Operation: "delete",
+				Resource:  "pod",
+				Name:      "nginx",
+				Namespace: "production",
+				Context:   "prod-cluster",
+				Args:      []string{"delete", "pod", "nginx", "-n", "production", "--context", "prod-cluster"},
 			},
 		},
 	}
@@ -262,6 +300,10 @@ func TestParse(t *testing.T) {
 
 			if result.Namespace != tt.expected.Namespace {
 				t.Errorf("Namespace: got %q, expected %q", result.Namespace, tt.expected.Namespace)
+			}
+
+			if result.Context != tt.expected.Context {
+				t.Errorf("Context: got %q, expected %q", result.Context, tt.expected.Context)
 			}
 
 			if !reflect.DeepEqual(result.Args, tt.expected.Args) {
@@ -332,6 +374,59 @@ func TestGetNamespaceDisplay(t *testing.T) {
 			result := tt.cmd.GetNamespaceDisplay()
 			if result != tt.expected {
 				t.Errorf("GetNamespaceDisplay() = %q, expected %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsNodeScoped(t *testing.T) {
+	tests := []struct {
+		name     string
+		cmd      *KubectlCommand
+		expected bool
+	}{
+		{
+			name:     "cordon is node-scoped",
+			cmd:      &KubectlCommand{Operation: "cordon"},
+			expected: true,
+		},
+		{
+			name:     "uncordon is node-scoped",
+			cmd:      &KubectlCommand{Operation: "uncordon"},
+			expected: true,
+		},
+		{
+			name:     "drain is node-scoped",
+			cmd:      &KubectlCommand{Operation: "drain"},
+			expected: true,
+		},
+		{
+			name:     "taint is node-scoped",
+			cmd:      &KubectlCommand{Operation: "taint"},
+			expected: true,
+		},
+		{
+			name:     "delete is not node-scoped",
+			cmd:      &KubectlCommand{Operation: "delete"},
+			expected: false,
+		},
+		{
+			name:     "apply is not node-scoped",
+			cmd:      &KubectlCommand{Operation: "apply"},
+			expected: false,
+		},
+		{
+			name:     "get is not node-scoped",
+			cmd:      &KubectlCommand{Operation: "get"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.cmd.IsNodeScoped()
+			if result != tt.expected {
+				t.Errorf("IsNodeScoped() = %v, expected %v", result, tt.expected)
 			}
 		})
 	}

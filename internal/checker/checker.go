@@ -9,6 +9,7 @@ import (
 type CheckResult struct {
 	IsDangerous          bool
 	RequiresConfirmation bool
+	IsNodeScoped         bool
 	Operation            string
 	Resource             string
 	Namespace            string
@@ -31,13 +32,15 @@ func New(cfg *config.Config) *Checker {
 // Check analyzes a kubectl command and returns check result
 func (c *Checker) Check(cmd *parser.KubectlCommand, cluster string) *CheckResult {
 	namespace := cmd.GetNamespaceDisplay()
+	isNodeScoped := cmd.IsNodeScoped()
 
 	result := &CheckResult{
-		Operation: cmd.Operation,
-		Resource:  cmd.GetResourceDisplay(),
-		Namespace: namespace,
-		Cluster:   cluster,
-		Reasons:   []string{},
+		Operation:    cmd.Operation,
+		Resource:     cmd.GetResourceDisplay(),
+		Namespace:    namespace,
+		Cluster:      cluster,
+		IsNodeScoped: isNodeScoped,
+		Reasons:      []string{},
 	}
 
 	// Only check if operation is dangerous first

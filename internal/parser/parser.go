@@ -10,7 +10,16 @@ type KubectlCommand struct {
 	Resource  string   // e.g., pod, deployment, pod/nginx
 	Name      string   // e.g., nginx (if separate from resource)
 	Namespace string   // from -n or --namespace flag
+	Context   string   // from --context flag
 	Args      []string // original arguments
+}
+
+// Node-scoped operations that don't have a namespace
+var nodeScopedOperations = map[string]bool{
+	"cordon":   true,
+	"uncordon": true,
+	"drain":    true,
+	"taint":    true,
 }
 
 // Parse parses kubectl arguments and extracts command info
@@ -33,12 +42,19 @@ func Parse(args []string) *KubectlCommand {
 			if args[i] == "-n" || args[i] == "--namespace" {
 				cmd.Namespace = args[i+1]
 			}
+			// Check for context flag
+			if args[i] == "--context" {
+				cmd.Context = args[i+1]
+			}
 			i += 2
 		} else if strings.HasPrefix(args[i], "-n=") {
 			cmd.Namespace = strings.TrimPrefix(args[i], "-n=")
 			i++
 		} else if strings.HasPrefix(args[i], "--namespace=") {
 			cmd.Namespace = strings.TrimPrefix(args[i], "--namespace=")
+			i++
+		} else if strings.HasPrefix(args[i], "--context=") {
+			cmd.Context = strings.TrimPrefix(args[i], "--context=")
 			i++
 		} else {
 			i++
@@ -51,7 +67,7 @@ func Parse(args []string) *KubectlCommand {
 		i++
 	}
 
-	// Parse remaining arguments for resource, name, and namespace
+	// Parse remaining arguments for resource, name, namespace, and context
 	for i < len(args) {
 		arg := args[i]
 
@@ -68,6 +84,19 @@ func Parse(args []string) *KubectlCommand {
 			continue
 		} else if strings.HasPrefix(arg, "--namespace=") {
 			cmd.Namespace = strings.TrimPrefix(arg, "--namespace=")
+			i++
+			continue
+		}
+
+		// Handle context flag anywhere in args
+		if arg == "--context" {
+			if i+1 < len(args) {
+				cmd.Context = args[i+1]
+				i += 2
+				continue
+			}
+		} else if strings.HasPrefix(arg, "--context=") {
+			cmd.Context = strings.TrimPrefix(arg, "--context=")
 			i++
 			continue
 		}
@@ -155,4 +184,9 @@ func (k *KubectlCommand) GetNamespaceDisplay() string {
 		return "default"
 	}
 	return k.Namespace
+}
+
+// IsNodeScoped returns true if the operation is node-scoped (no namespace)
+func (k *KubectlCommand) IsNodeScoped() bool {
+	return nodeScopedOperations[k.Operation]
 }

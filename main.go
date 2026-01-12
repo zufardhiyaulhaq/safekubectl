@@ -56,8 +56,11 @@ func (r *Runner) Run(args []string) error {
 	// Parse kubectl command
 	cmd := parser.Parse(args)
 
-	// Get current cluster context
-	cluster := r.getCluster()
+	// Get cluster context - use parsed --context flag if provided, otherwise get current context
+	cluster := cmd.Context
+	if cluster == "" {
+		cluster = r.getCluster()
+	}
 
 	// Check if command is dangerous
 	chk := checker.New(cfg)
