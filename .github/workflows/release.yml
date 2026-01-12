@@ -43,6 +43,9 @@ jobs:
         with:
           go-version: '1.21'
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
@@ -52,16 +55,16 @@ jobs:
           mkdir -p dist
 
           # Linux amd64
-          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-linux-amd64 ./cmd/safekubectl/
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-linux-amd64 ./cmd/safekubectl
 
           # Linux arm64
-          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-linux-arm64 ./cmd/safekubectl/
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-linux-arm64 ./cmd/safekubectl
 
           # macOS amd64
-          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-darwin-amd64 ./cmd/safekubectl/
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-darwin-amd64 ./cmd/safekubectl
 
           # macOS arm64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-darwin-arm64 ./cmd/safekubectl/
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" -o dist/safekubectl-darwin-arm64 ./cmd/safekubectl
 
       - name: Create archives
         run: |
