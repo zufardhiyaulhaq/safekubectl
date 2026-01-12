@@ -1,5 +1,8 @@
 # safekubectl
 
+[![CI](https://github.com/zufardhiyaulhaq/safekubectl/actions/workflows/ci.yml/badge.svg)](https://github.com/zufardhiyaulhaq/safekubectl/actions/workflows/ci.yml)
+[![Release](https://github.com/zufardhiyaulhaq/safekubectl/actions/workflows/release.yml/badge.svg)](https://github.com/zufardhiyaulhaq/safekubectl/actions/workflows/release.yml)
+
 A kubectl wrapper that warns and prompts for confirmation before executing dangerous operations.
 
 ## Features
@@ -11,6 +14,32 @@ A kubectl wrapper that warns and prompts for confirmation before executing dange
 - Fully configurable via YAML config file
 
 ## Installation
+
+### Download Binary
+
+Download the latest release from the [GitHub Releases](https://github.com/zufardhiyaulhaq/safekubectl/releases) page.
+
+```bash
+# Linux (amd64)
+curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-linux-amd64.tar.gz
+tar -xzf safekubectl-linux-amd64.tar.gz
+sudo mv safekubectl-linux-amd64 /usr/local/bin/safekubectl
+
+# Linux (arm64)
+curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-linux-arm64.tar.gz
+tar -xzf safekubectl-linux-arm64.tar.gz
+sudo mv safekubectl-linux-arm64 /usr/local/bin/safekubectl
+
+# macOS (Intel)
+curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-darwin-amd64.tar.gz
+tar -xzf safekubectl-darwin-amd64.tar.gz
+sudo mv safekubectl-darwin-amd64 /usr/local/bin/safekubectl
+
+# macOS (Apple Silicon)
+curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-darwin-arm64.tar.gz
+tar -xzf safekubectl-darwin-arm64.tar.gz
+sudo mv safekubectl-darwin-arm64 /usr/local/bin/safekubectl
+```
 
 ### From Source
 
