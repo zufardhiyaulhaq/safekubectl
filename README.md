@@ -23,22 +23,22 @@ Download the latest release from the [GitHub Releases](https://github.com/zufard
 # Linux (amd64)
 curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-linux-amd64.tar.gz
 tar -xzf safekubectl-linux-amd64.tar.gz
-sudo mv safekubectl-linux-amd64 /usr/local/bin/safekubectl
+sudo mv safekubectl /usr/local/bin/safekubectl
 
 # Linux (arm64)
 curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-linux-arm64.tar.gz
 tar -xzf safekubectl-linux-arm64.tar.gz
-sudo mv safekubectl-linux-arm64 /usr/local/bin/safekubectl
+sudo mv safekubectl /usr/local/bin/safekubectl
 
 # macOS (Intel)
 curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-darwin-amd64.tar.gz
 tar -xzf safekubectl-darwin-amd64.tar.gz
-sudo mv safekubectl-darwin-amd64 /usr/local/bin/safekubectl
+sudo mv safekubectl /usr/local/bin/safekubectl
 
 # macOS (Apple Silicon)
 curl -LO https://github.com/zufardhiyaulhaq/safekubectl/releases/latest/download/safekubectl-darwin-arm64.tar.gz
 tar -xzf safekubectl-darwin-arm64.tar.gz
-sudo mv safekubectl-darwin-arm64 /usr/local/bin/safekubectl
+sudo mv safekubectl /usr/local/bin/safekubectl
 ```
 
 ### From Source
