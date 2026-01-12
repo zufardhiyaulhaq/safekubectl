@@ -47,6 +47,5 @@ jobs:
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
           goversion: "https://dl.google.com/go/go1.24.0.linux-amd64.tar.gz"
-          project_path: ./cmd/safekubectl
           binary_name: safekubectl
           asset_name: "safekubectl-${{ matrix.goos }}-${{ matrix.goarch }}"

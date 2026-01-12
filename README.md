@@ -49,7 +49,7 @@ git clone https://github.com/zufardhiyaulhaq/safekubectl.git
 cd safekubectl
 
 # Build
-go build -o safekubectl ./cmd/safekubectl/
+go build -o safekubectl .
 
 # Install to PATH (optional)
 sudo mv safekubectl /usr/local/bin/
@@ -271,7 +271,7 @@ go test ./... -cover
 ### Build
 
 ```bash
-go build -o safekubectl ./cmd/safekubectl/
+go build -o safekubectl .
 ```
 
 ## License
