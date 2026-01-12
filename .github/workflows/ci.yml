@@ -33,7 +33,7 @@ jobs:
     needs: test
     strategy:
       matrix:
-        goos: [linux, darwin, windows]
+        goos: [linux, darwin]
         goarch: [amd64, arm64]
     steps:
       - name: Checkout code
@@ -49,11 +49,8 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          binary_name="safekubectl"
-          if [ "$GOOS" = "windows" ]; then
-            binary_name="safekubectl.exe"
-          fi
-          go build -o dist/${binary_name}-${GOOS}-${GOARCH} ./cmd/safekubectl/
+          mkdir -p dist
+          go build -o dist/safekubectl-${GOOS}-${GOARCH} ./cmd/safekubectl/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
