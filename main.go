@@ -75,7 +75,7 @@ func (r *Runner) Run(args []string) error {
 	}
 
 	// Display warning
-	prompt.DisplayWarningTo(r.stdout, result)
+	prompt.DisplayWarningTo(r.stdout, result, args)
 
 	// Handle based on confirmation requirement
 	confirmed := false

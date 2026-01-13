@@ -15,9 +15,10 @@ func TestDisplayWarningTo(t *testing.T) {
 		Namespace: "production",
 		Cluster:   "prod-cluster",
 	}
+	args := []string{"delete", "pod", "nginx", "-n", "production"}
 
 	var buf bytes.Buffer
-	DisplayWarningTo(&buf, result)
+	DisplayWarningTo(&buf, result, args)
 	output := buf.String()
 
 	// Check that all expected elements are present
@@ -31,6 +32,8 @@ func TestDisplayWarningTo(t *testing.T) {
 		"production",
 		"Cluster:",
 		"prod-cluster",
+		"Command:",
+		"kubectl delete pod nginx -n production",
 	}
 
 	for _, part := range expectedParts {
@@ -55,9 +58,10 @@ func TestDisplayWarningToWithEmptyFields(t *testing.T) {
 		Namespace: "",
 		Cluster:   "",
 	}
+	args := []string{}
 
 	var buf bytes.Buffer
-	DisplayWarningTo(&buf, result)
+	DisplayWarningTo(&buf, result, args)
 	output := buf.String()
 
 	// Should still contain the header
@@ -163,9 +167,10 @@ func TestDisplayWarningContainsColors(t *testing.T) {
 		Namespace: "production",
 		Cluster:   "prod-cluster",
 	}
+	args := []string{"delete", "pod/nginx", "-n", "production"}
 
 	var buf bytes.Buffer
-	DisplayWarningTo(&buf, result)
+	DisplayWarningTo(&buf, result, args)
 	output := buf.String()
 
 	// Check that colors are applied

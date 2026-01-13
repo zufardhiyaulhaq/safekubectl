@@ -17,12 +17,12 @@ const (
 )
 
 // DisplayWarning shows the danger warning to the user
-func DisplayWarning(result *checker.CheckResult) {
-	DisplayWarningTo(os.Stdout, result)
+func DisplayWarning(result *checker.CheckResult, args []string) {
+	DisplayWarningTo(os.Stdout, result, args)
 }
 
 // DisplayWarningTo writes the warning to the specified writer
-func DisplayWarningTo(w io.Writer, result *checker.CheckResult) {
+func DisplayWarningTo(w io.Writer, result *checker.CheckResult, args []string) {
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "%s%s  DANGEROUS OPERATION DETECTED%s\n", colorYellow, warningIcon(), colorReset)
 	fmt.Fprintf(w, "├── Operation: %s%s%s\n", colorRed, result.Operation, colorReset)
@@ -31,7 +31,8 @@ func DisplayWarningTo(w io.Writer, result *checker.CheckResult) {
 	if !result.IsNodeScoped {
 		fmt.Fprintf(w, "├── Namespace: %s\n", result.Namespace)
 	}
-	fmt.Fprintf(w, "└── Cluster:   %s\n", result.Cluster)
+	fmt.Fprintf(w, "├── Cluster:   %s\n", result.Cluster)
+	fmt.Fprintf(w, "└── Command:   kubectl %s\n", strings.Join(args, " "))
 	fmt.Fprintln(w)
 }
 
