@@ -80,3 +80,62 @@ func DisplayProceedingTo(w io.Writer) {
 func warningIcon() string {
 	return "\u26A0\uFE0F "
 }
+
+// DisplayResourceWarning shows the danger warning for file-based commands
+func DisplayResourceWarning(result *checker.ResourceCheckResult, args []string) {
+	DisplayResourceWarningTo(os.Stdout, result, args)
+}
+
+// DisplayResourceWarningTo writes the resource warning to the specified writer
+func DisplayResourceWarningTo(w io.Writer, result *checker.ResourceCheckResult, args []string) {
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "%s%s  DANGEROUS OPERATION DETECTED%s\n", colorYellow, warningIcon(), colorReset)
+	fmt.Fprintf(w, "├── Operation: %s%s%s\n", colorRed, result.Operation, colorReset)
+	fmt.Fprintf(w, "├── Cluster:   %s\n", result.Cluster)
+	fmt.Fprintf(w, "├── Command:   kubectl %s\n", strings.Join(args, " "))
+	fmt.Fprintln(w, "│")
+	fmt.Fprintln(w, "├── Resources affected:")
+
+	for i, r := range result.Resources {
+		prefix := "│   ├──"
+		if i == len(result.Resources)-1 {
+			prefix = "│   └──"
+		}
+		ns := r.Namespace
+		if ns == "" {
+			ns = "(unspecified)"
+		}
+		fmt.Fprintf(w, "%s %s in namespace %s\n", prefix, r.String(), ns)
+	}
+
+	if len(result.Reasons) > 0 {
+		fmt.Fprintln(w, "│")
+		fmt.Fprintln(w, "└── Reasons:")
+		for i, reason := range result.Reasons {
+			prefix := "    ├──"
+			if i == len(result.Reasons)-1 {
+				prefix = "    └──"
+			}
+			fmt.Fprintf(w, "%s %s\n", prefix, reason)
+		}
+	}
+
+	fmt.Fprintln(w)
+}
+
+// DisplayURLWarning shows the warning before fetching a remote manifest
+func DisplayURLWarning(url string) {
+	DisplayURLWarningTo(os.Stdout, url)
+}
+
+// DisplayURLWarningTo writes the URL warning to the specified writer
+func DisplayURLWarningTo(w io.Writer, url string) {
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "%s%s  REMOTE MANIFEST WARNING%s\n", colorYellow, warningIcon(), colorReset)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "You are about to fetch a manifest from:")
+	fmt.Fprintf(w, "  %s\n", url)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Fetching remote manifests can be risky.")
+	fmt.Fprintln(w)
+}

@@ -6,12 +6,14 @@ import (
 
 // KubectlCommand represents a parsed kubectl command
 type KubectlCommand struct {
-	Operation string   // e.g., delete, apply, get
-	Resource  string   // e.g., pod, deployment, pod/nginx
-	Name      string   // e.g., nginx (if separate from resource)
-	Namespace string   // from -n or --namespace flag
-	Context   string   // from --context flag
-	Args      []string // original arguments
+	Operation  string   // e.g., delete, apply, get
+	Resource   string   // e.g., pod, deployment, pod/nginx
+	Name       string   // e.g., nginx (if separate from resource)
+	Namespace  string   // from -n or --namespace flag
+	Context    string   // from --context flag
+	Args       []string // original arguments
+	FileInputs []string // paths/URLs from -f/--filename flags
+	Recursive  bool     // -R/--recursive flag present
 }
 
 // Node-scoped operations that don't have a namespace
@@ -36,6 +38,30 @@ func Parse(args []string) *KubectlCommand {
 	// Skip global flags at the beginning
 	i := 0
 	for i < len(args) && strings.HasPrefix(args[i], "-") {
+		// Handle file input flags
+		if args[i] == "-f" || args[i] == "--filename" {
+			if i+1 < len(args) {
+				cmd.FileInputs = append(cmd.FileInputs, args[i+1])
+				i += 2
+				continue
+			}
+		} else if strings.HasPrefix(args[i], "-f=") {
+			cmd.FileInputs = append(cmd.FileInputs, strings.TrimPrefix(args[i], "-f="))
+			i++
+			continue
+		} else if strings.HasPrefix(args[i], "--filename=") {
+			cmd.FileInputs = append(cmd.FileInputs, strings.TrimPrefix(args[i], "--filename="))
+			i++
+			continue
+		}
+
+		// Handle recursive flag
+		if args[i] == "-R" || args[i] == "--recursive" {
+			cmd.Recursive = true
+			i++
+			continue
+		}
+
 		// Handle flags with values
 		if needsValue(args[i]) && i+1 < len(args) {
 			// Check for namespace flag
@@ -70,6 +96,30 @@ func Parse(args []string) *KubectlCommand {
 	// Parse remaining arguments for resource, name, namespace, and context
 	for i < len(args) {
 		arg := args[i]
+
+		// Handle file input flags
+		if arg == "-f" || arg == "--filename" {
+			if i+1 < len(args) {
+				cmd.FileInputs = append(cmd.FileInputs, args[i+1])
+				i += 2
+				continue
+			}
+		} else if strings.HasPrefix(arg, "-f=") {
+			cmd.FileInputs = append(cmd.FileInputs, strings.TrimPrefix(arg, "-f="))
+			i++
+			continue
+		} else if strings.HasPrefix(arg, "--filename=") {
+			cmd.FileInputs = append(cmd.FileInputs, strings.TrimPrefix(arg, "--filename="))
+			i++
+			continue
+		}
+
+		// Handle recursive flag
+		if arg == "-R" || arg == "--recursive" {
+			cmd.Recursive = true
+			i++
+			continue
+		}
 
 		// Handle namespace flag anywhere in args
 		if arg == "-n" || arg == "--namespace" {

@@ -10,18 +10,20 @@ import (
 	"github.com/zufardhiyaulhaq/safekubectl/internal/audit"
 	"github.com/zufardhiyaulhaq/safekubectl/internal/checker"
 	"github.com/zufardhiyaulhaq/safekubectl/internal/config"
+	"github.com/zufardhiyaulhaq/safekubectl/internal/manifest"
 	"github.com/zufardhiyaulhaq/safekubectl/internal/parser"
 	"github.com/zufardhiyaulhaq/safekubectl/internal/prompt"
 )
 
 func main() {
 	runner := &Runner{
-		stdin:          os.Stdin,
-		stdout:         os.Stdout,
-		stderr:         os.Stderr,
-		getCluster:     getCurrentCluster,
-		executeKubectl: executeKubectl,
-		loadConfig:     config.Load,
+		stdin:               os.Stdin,
+		stdout:              os.Stdout,
+		stderr:              os.Stderr,
+		getCluster:          getCurrentCluster,
+		getContextNamespace: getContextDefaultNamespace,
+		executeKubectl:      executeKubectl,
+		loadConfig:          config.Load,
 	}
 
 	if err := runner.Run(os.Args[1:]); err != nil {
@@ -32,12 +34,13 @@ func main() {
 
 // Runner encapsulates the main execution logic
 type Runner struct {
-	stdin          io.Reader
-	stdout         io.Writer
-	stderr         io.Writer
-	getCluster     func() string
-	executeKubectl func(args []string) error
-	loadConfig     func() (*config.Config, error)
+	stdin               io.Reader
+	stdout              io.Writer
+	stderr              io.Writer
+	getCluster          func() string
+	getContextNamespace func() string
+	executeKubectl      func(args []string) error
+	loadConfig          func() (*config.Config, error)
 }
 
 // Run executes the main logic
@@ -60,6 +63,11 @@ func (r *Runner) Run(args []string) error {
 	cluster := cmd.Context
 	if cluster == "" {
 		cluster = r.getCluster()
+	}
+
+	// Handle file-based commands
+	if len(cmd.FileInputs) > 0 {
+		return r.runWithFileInputs(cmd, cfg, cluster, args)
 	}
 
 	// Check if command is dangerous
@@ -104,12 +112,82 @@ func (r *Runner) Run(args []string) error {
 	return r.executeKubectl(args)
 }
 
+// runWithFileInputs handles commands with -f flags
+func (r *Runner) runWithFileInputs(cmd *parser.KubectlCommand, cfg *config.Config, cluster string, args []string) error {
+	// Collect all resources from all file inputs
+	var allResources []manifest.Resource
+
+	confirmURL := func(url string) bool {
+		prompt.DisplayURLWarningTo(r.stdout, url)
+		return prompt.AskConfirmationFrom(r.stdin, r.stdout)
+	}
+
+	for _, fileInput := range cmd.FileInputs {
+		resources, err := manifest.Parse(fileInput, cmd.Recursive, confirmURL)
+		if err != nil {
+			return fmt.Errorf("failed to parse %s: %w", fileInput, err)
+		}
+		allResources = append(allResources, resources...)
+	}
+
+	// Resolve empty namespaces
+	fallbackNS := cmd.Namespace
+	if fallbackNS == "" && r.getContextNamespace != nil {
+		fallbackNS = r.getContextNamespace()
+	}
+	if fallbackNS == "" {
+		fallbackNS = "default"
+	}
+
+	for i := range allResources {
+		if allResources[i].Namespace == "" {
+			allResources[i].Namespace = fallbackNS
+		}
+	}
+
+	// Check resources
+	chk := checker.New(cfg)
+	result := chk.CheckResources(cmd.Operation, allResources, cluster)
+
+	// If not dangerous, execute directly
+	if !result.IsDangerous {
+		return r.executeKubectl(args)
+	}
+
+	// Display warning
+	prompt.DisplayResourceWarningTo(r.stdout, result, args)
+
+	// Handle confirmation
+	if result.RequiresConfirmation {
+		confirmed := prompt.AskConfirmationFrom(r.stdin, r.stdout)
+		if !confirmed {
+			prompt.DisplayAbortedTo(r.stdout)
+			return nil
+		}
+	} else {
+		prompt.DisplayProceedingTo(r.stdout)
+	}
+
+	// Execute kubectl
+	return r.executeKubectl(args)
+}
+
 // getCurrentCluster gets the current kubernetes context/cluster name
 func getCurrentCluster() string {
 	cmd := exec.Command("kubectl", "config", "current-context")
 	output, err := cmd.Output()
 	if err != nil {
 		return "<unknown>"
+	}
+	return strings.TrimSpace(string(output))
+}
+
+// getContextDefaultNamespace gets the default namespace from current context
+func getContextDefaultNamespace() string {
+	cmd := exec.Command("kubectl", "config", "view", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
 	}
 	return strings.TrimSpace(string(output))
 }

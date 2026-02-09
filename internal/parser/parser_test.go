@@ -471,3 +471,75 @@ func TestNeedsValue(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFileInputs(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		fileInputs []string
+		recursive  bool
+	}{
+		{
+			name:       "single -f flag",
+			args:       []string{"apply", "-f", "deploy.yaml"},
+			fileInputs: []string{"deploy.yaml"},
+			recursive:  false,
+		},
+		{
+			name:       "multiple -f flags",
+			args:       []string{"apply", "-f", "deploy.yaml", "-f", "service.yaml"},
+			fileInputs: []string{"deploy.yaml", "service.yaml"},
+			recursive:  false,
+		},
+		{
+			name:       "-f= syntax",
+			args:       []string{"apply", "-f=deploy.yaml"},
+			fileInputs: []string{"deploy.yaml"},
+			recursive:  false,
+		},
+		{
+			name:       "--filename flag",
+			args:       []string{"apply", "--filename", "deploy.yaml"},
+			fileInputs: []string{"deploy.yaml"},
+			recursive:  false,
+		},
+		{
+			name:       "--filename= syntax",
+			args:       []string{"apply", "--filename=deploy.yaml"},
+			fileInputs: []string{"deploy.yaml"},
+			recursive:  false,
+		},
+		{
+			name:       "with -R flag",
+			args:       []string{"apply", "-f", "./manifests/", "-R"},
+			fileInputs: []string{"./manifests/"},
+			recursive:  true,
+		},
+		{
+			name:       "with --recursive flag",
+			args:       []string{"apply", "-f", "./manifests/", "--recursive"},
+			fileInputs: []string{"./manifests/"},
+			recursive:  true,
+		},
+		{
+			name:       "no file inputs",
+			args:       []string{"get", "pods"},
+			fileInputs: nil,
+			recursive:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if !reflect.DeepEqual(result.FileInputs, tt.fileInputs) {
+				t.Errorf("FileInputs = %v, expected %v", result.FileInputs, tt.fileInputs)
+			}
+
+			if result.Recursive != tt.recursive {
+				t.Errorf("Recursive = %v, expected %v", result.Recursive, tt.recursive)
+			}
+		})
+	}
+}

@@ -2,6 +2,7 @@ package checker
 
 import (
 	"github.com/zufardhiyaulhaq/safekubectl/internal/config"
+	"github.com/zufardhiyaulhaq/safekubectl/internal/manifest"
 	"github.com/zufardhiyaulhaq/safekubectl/internal/parser"
 )
 
@@ -62,6 +63,66 @@ func (c *Checker) Check(cmd *parser.KubectlCommand, cluster string) *CheckResult
 
 	// Determine if confirmation is required
 	result.RequiresConfirmation = c.config.RequiresConfirmation(namespace, cluster)
+
+	return result
+}
+
+// ResourceCheckResult contains check result for file-based commands
+type ResourceCheckResult struct {
+	IsDangerous          bool
+	RequiresConfirmation bool
+	Operation            string
+	Cluster              string
+	Resources            []manifest.Resource
+	Reasons              []string
+}
+
+// CheckResources analyzes multiple resources from manifest files
+func (c *Checker) CheckResources(operation string, resources []manifest.Resource, cluster string) *ResourceCheckResult {
+	result := &ResourceCheckResult{
+		Operation: operation,
+		Cluster:   cluster,
+		Resources: resources,
+		Reasons:   []string{},
+	}
+
+	// Check if operation is dangerous
+	if !c.config.IsDangerousOperation(operation) {
+		return result
+	}
+
+	result.IsDangerous = true
+	result.Reasons = append(result.Reasons, "dangerous operation: "+operation)
+
+	// Check each resource's namespace
+	protectedNamespaces := make(map[string]bool)
+	for _, r := range resources {
+		ns := r.Namespace
+		if ns == "" {
+			ns = "default"
+		}
+		if c.config.IsProtectedNamespace(ns) {
+			protectedNamespaces[ns] = true
+		}
+	}
+
+	for ns := range protectedNamespaces {
+		result.Reasons = append(result.Reasons, "protected namespace: "+ns)
+	}
+
+	// Check protected cluster
+	if c.config.IsProtectedCluster(cluster) {
+		result.Reasons = append(result.Reasons, "protected cluster: "+cluster)
+	}
+
+	// Determine if confirmation required
+	result.RequiresConfirmation = c.config.Mode == config.ModeConfirm
+	if !result.RequiresConfirmation {
+		// In warn-only mode, still require confirmation for protected resources
+		if len(protectedNamespaces) > 0 || c.config.IsProtectedCluster(cluster) {
+			result.RequiresConfirmation = true
+		}
+	}
 
 	return result
 }

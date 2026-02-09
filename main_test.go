@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -18,6 +20,7 @@ func TestRunEmptyArgs(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			if len(args) != 0 {
@@ -51,6 +54,7 @@ func TestRunSafeOperation(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			executedArgs = args
@@ -86,6 +90,7 @@ func TestRunDangerousOperationConfirmed(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -123,6 +128,7 @@ func TestRunDangerousOperationDenied(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -160,6 +166,7 @@ func TestRunWarnOnlyMode(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -201,6 +208,7 @@ func TestRunWarnOnlyModeProtectedNamespace(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -233,6 +241,7 @@ func TestRunConfigLoadError(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			return nil
 		},
@@ -259,6 +268,7 @@ func TestRunKubectlError(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			return errors.New("kubectl error")
 		},
@@ -288,6 +298,7 @@ func TestRunWithAuditEnabled(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -321,6 +332,7 @@ func TestRunWithAuditEnabledDenied(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
+		getContextNamespace: func() string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -357,6 +369,7 @@ func TestRunMultipleDangerousOperations(t *testing.T) {
 				getCluster: func() string {
 					return "test-cluster"
 				},
+				getContextNamespace: func() string { return "default" },
 				executeKubectl: func(args []string) error {
 					return nil
 				},
@@ -384,5 +397,233 @@ func TestGetCurrentCluster(t *testing.T) {
 	cluster := getCurrentCluster()
 	if cluster == "" {
 		t.Error("getCurrentCluster should not return empty string")
+	}
+}
+
+func TestRunWithFileInput(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "deploy.yaml")
+	content := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: istio-system`
+	os.WriteFile(manifestPath, []byte(content), 0644)
+
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+		ProtectedNamespaces: []string{"istio-system"},
+		ProtectedClusters:   []string{},
+	}
+
+	var stdout bytes.Buffer
+	stdin := strings.NewReader("n\n")
+
+	runner := &Runner{
+		stdin:               stdin,
+		stdout:              &stdout,
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test-cluster" },
+		getContextNamespace: func() string { return "default" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	err := runner.Run([]string{"apply", "-f", manifestPath})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "istio-system") {
+		t.Errorf("Expected 'istio-system' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Deployment/nginx") {
+		t.Errorf("Expected 'Deployment/nginx' in output, got: %s", output)
+	}
+}
+
+func TestIntegrationMultiDocYAML(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "multi.yaml")
+	content := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: istio-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-svc
+  namespace: default`
+	os.WriteFile(manifestPath, []byte(content), 0644)
+
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+		ProtectedNamespaces: []string{"istio-system"},
+		ProtectedClusters:   []string{},
+	}
+
+	var stdout bytes.Buffer
+	stdin := strings.NewReader("n\n")
+
+	runner := &Runner{
+		stdin:               stdin,
+		stdout:              &stdout,
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test" },
+		getContextNamespace: func() string { return "default" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	runner.Run([]string{"apply", "-f", manifestPath})
+
+	output := stdout.String()
+	if !strings.Contains(output, "Deployment/nginx") {
+		t.Error("Expected Deployment/nginx")
+	}
+	if !strings.Contains(output, "Service/nginx-svc") {
+		t.Error("Expected Service/nginx-svc")
+	}
+	if !strings.Contains(output, "istio-system") {
+		t.Error("Expected istio-system namespace")
+	}
+}
+
+func TestIntegrationDirectoryRecursive(t *testing.T) {
+	dir := t.TempDir()
+
+	// Root level file
+	os.WriteFile(filepath.Join(dir, "root.yaml"), []byte(`apiVersion: v1
+kind: Pod
+metadata:
+  name: root-pod`), 0644)
+
+	// Nested file
+	subdir := filepath.Join(dir, "nested")
+	os.Mkdir(subdir, 0755)
+	os.WriteFile(filepath.Join(subdir, "nested.yaml"), []byte(`apiVersion: v1
+kind: Pod
+metadata:
+  name: nested-pod`), 0644)
+
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+		ProtectedNamespaces: []string{},
+		ProtectedClusters:   []string{},
+	}
+
+	// Test without -R (should only get root-pod)
+	var stdout1 bytes.Buffer
+	runner1 := &Runner{
+		stdin:               strings.NewReader("n\n"),
+		stdout:              &stdout1,
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test" },
+		getContextNamespace: func() string { return "default" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	runner1.Run([]string{"apply", "-f", dir})
+	output1 := stdout1.String()
+	if !strings.Contains(output1, "root-pod") {
+		t.Error("Expected root-pod without -R")
+	}
+	if strings.Contains(output1, "nested-pod") {
+		t.Error("Should not include nested-pod without -R")
+	}
+
+	// Test with -R (should get both)
+	var stdout2 bytes.Buffer
+	runner2 := &Runner{
+		stdin:               strings.NewReader("n\n"),
+		stdout:              &stdout2,
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test" },
+		getContextNamespace: func() string { return "default" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	runner2.Run([]string{"apply", "-f", dir, "-R"})
+	output2 := stdout2.String()
+	if !strings.Contains(output2, "root-pod") {
+		t.Error("Expected root-pod with -R")
+	}
+	if !strings.Contains(output2, "nested-pod") {
+		t.Error("Expected nested-pod with -R")
+	}
+}
+
+func TestIntegrationFallbackNamespace(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "no-ns.yaml")
+	content := `apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod`
+	os.WriteFile(manifestPath, []byte(content), 0644)
+
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+		ProtectedNamespaces: []string{"my-namespace"},
+		ProtectedClusters:   []string{},
+	}
+
+	var stdout bytes.Buffer
+	stdin := strings.NewReader("n\n")
+
+	runner := &Runner{
+		stdin:               stdin,
+		stdout:              &stdout,
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test" },
+		getContextNamespace: func() string { return "my-namespace" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	runner.Run([]string{"apply", "-f", manifestPath})
+
+	output := stdout.String()
+	if !strings.Contains(output, "my-namespace") {
+		t.Error("Expected my-namespace (from context)")
+	}
+	if !strings.Contains(output, "protected namespace") {
+		t.Error("Expected protected namespace warning")
+	}
+}
+
+func TestIntegrationFileParseError(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "invalid.yaml")
+	content := `invalid: yaml: content: [[[`
+	os.WriteFile(manifestPath, []byte(content), 0644)
+
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+	}
+
+	runner := &Runner{
+		stdin:               strings.NewReader(""),
+		stdout:              &bytes.Buffer{},
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test" },
+		getContextNamespace: func() string { return "default" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	err := runner.Run([]string{"apply", "-f", manifestPath})
+	if err == nil {
+		t.Error("Expected error for invalid YAML")
 	}
 }

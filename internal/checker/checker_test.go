@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/zufardhiyaulhaq/safekubectl/internal/config"
+	"github.com/zufardhiyaulhaq/safekubectl/internal/manifest"
 	"github.com/zufardhiyaulhaq/safekubectl/internal/parser"
 )
 
@@ -303,5 +304,77 @@ func TestCheckEmptyArgs(t *testing.T) {
 
 	if result.Operation != "" {
 		t.Errorf("Operation should be empty, got %q", result.Operation)
+	}
+}
+
+func TestCheckResources(t *testing.T) {
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply", "delete"},
+		ProtectedNamespaces: []string{"istio-system", "kube-system"},
+		ProtectedClusters:   []string{"prod-cluster"},
+	}
+
+	chk := New(cfg)
+
+	resources := []manifest.Resource{
+		{Kind: "Deployment", Name: "nginx", Namespace: "istio-system", Source: "deploy.yaml"},
+		{Kind: "Service", Name: "nginx-svc", Namespace: "default", Source: "deploy.yaml"},
+	}
+
+	result := chk.CheckResources("apply", resources, "dev-cluster")
+
+	if !result.IsDangerous {
+		t.Error("Expected IsDangerous=true for apply operation")
+	}
+
+	if len(result.Reasons) < 2 {
+		t.Errorf("Expected at least 2 reasons, got %d: %v", len(result.Reasons), result.Reasons)
+	}
+
+	if !result.RequiresConfirmation {
+		t.Error("Expected RequiresConfirmation=true")
+	}
+}
+
+func TestCheckResourcesProtectedCluster(t *testing.T) {
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+		ProtectedNamespaces: []string{},
+		ProtectedClusters:   []string{"prod-cluster"},
+	}
+
+	chk := New(cfg)
+
+	resources := []manifest.Resource{
+		{Kind: "Deployment", Name: "nginx", Namespace: "default", Source: "deploy.yaml"},
+	}
+
+	result := chk.CheckResources("apply", resources, "prod-cluster")
+
+	if !result.RequiresConfirmation {
+		t.Error("Expected RequiresConfirmation=true for protected cluster")
+	}
+}
+
+func TestCheckResourcesSafeOperation(t *testing.T) {
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"delete"},
+		ProtectedNamespaces: []string{"kube-system"},
+		ProtectedClusters:   []string{},
+	}
+
+	chk := New(cfg)
+
+	resources := []manifest.Resource{
+		{Kind: "Deployment", Name: "nginx", Namespace: "kube-system", Source: "deploy.yaml"},
+	}
+
+	result := chk.CheckResources("get", resources, "dev-cluster")
+
+	if result.IsDangerous {
+		t.Error("Expected IsDangerous=false for get operation")
 	}
 }

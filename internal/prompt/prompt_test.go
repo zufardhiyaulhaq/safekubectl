@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/zufardhiyaulhaq/safekubectl/internal/checker"
+	"github.com/zufardhiyaulhaq/safekubectl/internal/manifest"
 )
 
 func TestDisplayWarningTo(t *testing.T) {
@@ -182,5 +183,54 @@ func TestDisplayWarningContainsColors(t *testing.T) {
 	}
 	if !strings.Contains(output, colorReset) {
 		t.Error("expected output to contain color reset code")
+	}
+}
+
+func TestDisplayResourceWarning(t *testing.T) {
+	result := &checker.ResourceCheckResult{
+		IsDangerous:          true,
+		RequiresConfirmation: true,
+		Operation:            "apply",
+		Cluster:              "prod-cluster",
+		Resources: []manifest.Resource{
+			{Kind: "Deployment", Name: "nginx", Namespace: "istio-system", Source: "deploy.yaml"},
+			{Kind: "Service", Name: "nginx-svc", Namespace: "default", Source: "deploy.yaml"},
+		},
+		Reasons: []string{"dangerous operation: apply", "protected namespace: istio-system"},
+	}
+
+	var buf bytes.Buffer
+	DisplayResourceWarningTo(&buf, result, []string{"apply", "-f", "deploy.yaml"})
+
+	output := buf.String()
+
+	if !strings.Contains(output, "DANGEROUS OPERATION") {
+		t.Error("Expected warning header")
+	}
+	if !strings.Contains(output, "Deployment/nginx") {
+		t.Error("Expected Deployment/nginx in output")
+	}
+	if !strings.Contains(output, "istio-system") {
+		t.Error("Expected istio-system namespace in output")
+	}
+	if !strings.Contains(output, "Service/nginx-svc") {
+		t.Error("Expected Service/nginx-svc in output")
+	}
+	if !strings.Contains(output, "prod-cluster") {
+		t.Error("Expected cluster name in output")
+	}
+}
+
+func TestDisplayURLWarning(t *testing.T) {
+	var buf bytes.Buffer
+	DisplayURLWarningTo(&buf, "https://example.com/manifest.yaml")
+
+	output := buf.String()
+
+	if !strings.Contains(output, "REMOTE MANIFEST") {
+		t.Error("Expected remote manifest warning")
+	}
+	if !strings.Contains(output, "https://example.com/manifest.yaml") {
+		t.Error("Expected URL in output")
 	}
 }
