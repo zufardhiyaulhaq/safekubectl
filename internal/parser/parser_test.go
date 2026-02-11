@@ -138,8 +138,8 @@ func TestParse(t *testing.T) {
 			args: []string{"rollout", "restart", "deployment/nginx"},
 			expected: &KubectlCommand{
 				Operation: "rollout",
-				Resource:  "restart",
-				Name:      "deployment/nginx",
+				Resource:  "deployment",
+				Name:      "nginx",
 				Namespace: "",
 				Args:      []string{"rollout", "restart", "deployment/nginx"},
 			},
@@ -467,6 +467,73 @@ func TestNeedsValue(t *testing.T) {
 			result := needsValue(tt.flag)
 			if result != tt.expected {
 				t.Errorf("needsValue(%q) = %v, expected %v", tt.flag, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLogsWithFollowFlag(t *testing.T) {
+	// Bug: -f in "logs -f" means "follow", NOT file input
+	// Should NOT treat --tail as a file path
+	args := []string{"logs", "nginx-pod", "-f", "--tail", "100"}
+	result := Parse(args)
+
+	if result.Operation != "logs" {
+		t.Errorf("Operation = %q, expected %q", result.Operation, "logs")
+	}
+	if result.Resource != "nginx-pod" {
+		t.Errorf("Resource = %q, expected %q", result.Resource, "nginx-pod")
+	}
+	// Should NOT have any file inputs
+	if len(result.FileInputs) != 0 {
+		t.Errorf("FileInputs = %v, expected empty (logs -f means follow, not file)", result.FileInputs)
+	}
+}
+
+func TestRolloutRestartParsing(t *testing.T) {
+	// Bug: rollout restart deploy/nginx should show Resource=deployment, Name=nginx
+	// Not Resource=restart, Name=deploy/nginx
+	tests := []struct {
+		name             string
+		args             []string
+		expectedResource string
+		expectedName     string
+	}{
+		{
+			name:             "rollout restart with resource/name",
+			args:             []string{"rollout", "restart", "deploy/nginx"},
+			expectedResource: "deploy",
+			expectedName:     "nginx",
+		},
+		{
+			name:             "rollout restart with separate resource and name",
+			args:             []string{"rollout", "restart", "deployment", "nginx"},
+			expectedResource: "deployment",
+			expectedName:     "nginx",
+		},
+		{
+			name:             "rollout status",
+			args:             []string{"rollout", "status", "deployment/nginx"},
+			expectedResource: "deployment",
+			expectedName:     "nginx",
+		},
+		{
+			name:             "rollout undo",
+			args:             []string{"rollout", "undo", "deployment", "nginx"},
+			expectedResource: "deployment",
+			expectedName:     "nginx",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			}
+			if result.Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
 			}
 		})
 	}

@@ -70,6 +70,14 @@ func (r *Runner) Run(args []string) error {
 		return r.runWithFileInputs(cmd, cfg, cluster, args)
 	}
 
+	// Resolve namespace from context if not explicitly provided
+	if cmd.Namespace == "" && !cmd.IsNodeScoped() && r.getContextNamespace != nil {
+		contextNS := r.getContextNamespace()
+		if contextNS != "" {
+			cmd.Namespace = contextNS
+		}
+	}
+
 	// Check if command is dangerous
 	chk := checker.New(cfg)
 	result := chk.Check(cmd, cluster)

@@ -601,6 +601,80 @@ metadata:
 	}
 }
 
+func TestRunNamespaceFromContext(t *testing.T) {
+	// Bug: When no -n flag is provided, the warning should show the namespace
+	// from kubectl context, not "default"
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader("n\n"),
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func() string { return "kong-system" }, // Context namespace
+		executeKubectl: func(args []string) error {
+			return nil
+		},
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	// No -n flag provided
+	err := runner.Run([]string{"delete", "pod", "nginx"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	// Should show context namespace, not "default"
+	if !strings.Contains(output, "kong-system") {
+		t.Errorf("expected namespace 'kong-system' from context in output, got: %s", output)
+	}
+	if strings.Contains(output, "Namespace: default") {
+		t.Errorf("should not show 'default' when context namespace is 'kong-system', got: %s", output)
+	}
+}
+
+func TestRunNamespaceExplicitOverridesContext(t *testing.T) {
+	// When -n flag is provided, it should override the context namespace
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader("n\n"),
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func() string { return "kong-system" }, // Context namespace
+		executeKubectl: func(args []string) error {
+			return nil
+		},
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	// Explicit -n flag should take precedence
+	err := runner.Run([]string{"delete", "pod", "nginx", "-n", "production"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	// Should show explicit namespace, not context namespace
+	if !strings.Contains(output, "production") {
+		t.Errorf("expected namespace 'production' in output, got: %s", output)
+	}
+}
+
 func TestIntegrationFileParseError(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "invalid.yaml")
