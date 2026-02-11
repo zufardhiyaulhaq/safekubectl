@@ -186,6 +186,46 @@ func TestDisplayWarningContainsColors(t *testing.T) {
 	}
 }
 
+func TestDisplayWarningAllNamespaces(t *testing.T) {
+	result := &checker.CheckResult{
+		Operation:       "delete",
+		Resource:        "pods",
+		Namespace:       "",
+		Cluster:         "prod-cluster",
+		IsAllNamespaces: true,
+	}
+	args := []string{"delete", "pods", "--all", "-A"}
+
+	var buf bytes.Buffer
+	DisplayWarningTo(&buf, result, args)
+	output := buf.String()
+
+	// Should show special "ALL NAMESPACES" warning
+	if !strings.Contains(output, "ALL NAMESPACES") {
+		t.Errorf("expected ALL NAMESPACES warning, got: %s", output)
+	}
+}
+
+func TestDisplayWarningNodeScoped(t *testing.T) {
+	result := &checker.CheckResult{
+		Operation:    "drain",
+		Resource:     "node-1",
+		Namespace:    "default", // Should be ignored
+		Cluster:      "prod-cluster",
+		IsNodeScoped: true,
+	}
+	args := []string{"drain", "node-1"}
+
+	var buf bytes.Buffer
+	DisplayWarningTo(&buf, result, args)
+	output := buf.String()
+
+	// Should NOT show namespace for node-scoped operations
+	if strings.Contains(output, "Namespace:") {
+		t.Errorf("node-scoped operations should not show namespace, got: %s", output)
+	}
+}
+
 func TestDisplayResourceWarning(t *testing.T) {
 	result := &checker.ResourceCheckResult{
 		IsDangerous:          true,

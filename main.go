@@ -38,7 +38,7 @@ type Runner struct {
 	stdout              io.Writer
 	stderr              io.Writer
 	getCluster          func() string
-	getContextNamespace func() string
+	getContextNamespace func(context string) string // context param: empty = current, otherwise use specified
 	executeKubectl      func(args []string) error
 	loadConfig          func() (*config.Config, error)
 }
@@ -72,7 +72,7 @@ func (r *Runner) Run(args []string) error {
 
 	// Resolve namespace from context if not explicitly provided
 	if cmd.Namespace == "" && !cmd.IsNodeScoped() && r.getContextNamespace != nil {
-		contextNS := r.getContextNamespace()
+		contextNS := r.getContextNamespace(cmd.Context) // Use specified --context or empty for current
 		if contextNS != "" {
 			cmd.Namespace = contextNS
 		}
@@ -122,6 +122,11 @@ func (r *Runner) Run(args []string) error {
 
 // runWithFileInputs handles commands with -f flags
 func (r *Runner) runWithFileInputs(cmd *parser.KubectlCommand, cfg *config.Config, cluster string, args []string) error {
+	// Dry-run commands are safe - execute directly
+	if cmd.DryRun {
+		return r.executeKubectl(args)
+	}
+
 	// Collect all resources from all file inputs
 	var allResources []manifest.Resource
 
@@ -141,7 +146,7 @@ func (r *Runner) runWithFileInputs(cmd *parser.KubectlCommand, cfg *config.Confi
 	// Resolve empty namespaces
 	fallbackNS := cmd.Namespace
 	if fallbackNS == "" && r.getContextNamespace != nil {
-		fallbackNS = r.getContextNamespace()
+		fallbackNS = r.getContextNamespace(cmd.Context) // Use specified --context or empty for current
 	}
 	if fallbackNS == "" {
 		fallbackNS = "default"
@@ -157,6 +162,9 @@ func (r *Runner) runWithFileInputs(cmd *parser.KubectlCommand, cfg *config.Confi
 	chk := checker.New(cfg)
 	result := chk.CheckResources(cmd.Operation, allResources, cluster)
 
+	// Initialize audit logger
+	auditLogger := audit.New(cfg)
+
 	// If not dangerous, execute directly
 	if !result.IsDangerous {
 		return r.executeKubectl(args)
@@ -166,14 +174,25 @@ func (r *Runner) runWithFileInputs(cmd *parser.KubectlCommand, cfg *config.Confi
 	prompt.DisplayResourceWarningTo(r.stdout, result, args)
 
 	// Handle confirmation
+	confirmed := false
 	if result.RequiresConfirmation {
-		confirmed := prompt.AskConfirmationFrom(r.stdin, r.stdout)
+		confirmed = prompt.AskConfirmationFrom(r.stdin, r.stdout)
 		if !confirmed {
 			prompt.DisplayAbortedTo(r.stdout)
+			// Log denied operation
+			if err := auditLogger.LogResources(result, args, false, false); err != nil {
+				fmt.Fprintf(r.stderr, "warning: failed to write audit log: %s\n", err)
+			}
 			return nil
 		}
 	} else {
 		prompt.DisplayProceedingTo(r.stdout)
+		confirmed = true
+	}
+
+	// Log the operation
+	if err := auditLogger.LogResources(result, args, confirmed, true); err != nil {
+		fmt.Fprintf(r.stderr, "warning: failed to write audit log: %s\n", err)
 	}
 
 	// Execute kubectl
@@ -190,9 +209,19 @@ func getCurrentCluster() string {
 	return strings.TrimSpace(string(output))
 }
 
-// getContextDefaultNamespace gets the default namespace from current context
-func getContextDefaultNamespace() string {
-	cmd := exec.Command("kubectl", "config", "view", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}")
+// getContextDefaultNamespace gets the default namespace from the specified context
+// If context is empty, uses the current context
+func getContextDefaultNamespace(context string) string {
+	var cmd *exec.Cmd
+	if context == "" {
+		// Get namespace from current context
+		cmd = exec.Command("kubectl", "config", "view", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}")
+	} else {
+		// Get namespace from specific context
+		// Use jsonpath to find the namespace for the specified context
+		jsonpath := fmt.Sprintf("jsonpath={.contexts[?(@.name==\"%s\")].context.namespace}", context)
+		cmd = exec.Command("kubectl", "config", "view", "-o", jsonpath)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return ""

@@ -20,7 +20,7 @@ func TestRunEmptyArgs(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			if len(args) != 0 {
@@ -54,7 +54,7 @@ func TestRunSafeOperation(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			executedArgs = args
@@ -90,7 +90,7 @@ func TestRunDangerousOperationConfirmed(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -128,7 +128,7 @@ func TestRunDangerousOperationDenied(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -166,7 +166,7 @@ func TestRunWarnOnlyMode(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -208,7 +208,7 @@ func TestRunWarnOnlyModeProtectedNamespace(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -241,7 +241,7 @@ func TestRunConfigLoadError(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			return nil
 		},
@@ -268,7 +268,7 @@ func TestRunKubectlError(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			return errors.New("kubectl error")
 		},
@@ -298,7 +298,7 @@ func TestRunWithAuditEnabled(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -332,7 +332,7 @@ func TestRunWithAuditEnabledDenied(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl: func(args []string) error {
 			executed = true
 			return nil
@@ -369,7 +369,7 @@ func TestRunMultipleDangerousOperations(t *testing.T) {
 				getCluster: func() string {
 					return "test-cluster"
 				},
-				getContextNamespace: func() string { return "default" },
+				getContextNamespace: func(ctx string) string { return "default" },
 				executeKubectl: func(args []string) error {
 					return nil
 				},
@@ -425,7 +425,7 @@ metadata:
 		stdout:              &stdout,
 		stderr:              &bytes.Buffer{},
 		getCluster:          func() string { return "test-cluster" },
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl:      func(args []string) error { return nil },
 		loadConfig:          func() (*config.Config, error) { return cfg, nil },
 	}
@@ -475,7 +475,7 @@ metadata:
 		stdout:              &stdout,
 		stderr:              &bytes.Buffer{},
 		getCluster:          func() string { return "test" },
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl:      func(args []string) error { return nil },
 		loadConfig:          func() (*config.Config, error) { return cfg, nil },
 	}
@@ -525,7 +525,7 @@ metadata:
 		stdout:              &stdout1,
 		stderr:              &bytes.Buffer{},
 		getCluster:          func() string { return "test" },
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl:      func(args []string) error { return nil },
 		loadConfig:          func() (*config.Config, error) { return cfg, nil },
 	}
@@ -546,7 +546,7 @@ metadata:
 		stdout:              &stdout2,
 		stderr:              &bytes.Buffer{},
 		getCluster:          func() string { return "test" },
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl:      func(args []string) error { return nil },
 		loadConfig:          func() (*config.Config, error) { return cfg, nil },
 	}
@@ -585,7 +585,7 @@ metadata:
 		stdout:              &stdout,
 		stderr:              &bytes.Buffer{},
 		getCluster:          func() string { return "test" },
-		getContextNamespace: func() string { return "my-namespace" },
+		getContextNamespace: func(ctx string) string { return "my-namespace" },
 		executeKubectl:      func(args []string) error { return nil },
 		loadConfig:          func() (*config.Config, error) { return cfg, nil },
 	}
@@ -613,7 +613,7 @@ func TestRunNamespaceFromContext(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "kong-system" }, // Context namespace
+		getContextNamespace: func(ctx string) string { return "kong-system" }, // Context namespace
 		executeKubectl: func(args []string) error {
 			return nil
 		},
@@ -651,7 +651,7 @@ func TestRunNamespaceExplicitOverridesContext(t *testing.T) {
 		getCluster: func() string {
 			return "test-cluster"
 		},
-		getContextNamespace: func() string { return "kong-system" }, // Context namespace
+		getContextNamespace: func(ctx string) string { return "kong-system" }, // Context namespace
 		executeKubectl: func(args []string) error {
 			return nil
 		},
@@ -675,6 +675,312 @@ func TestRunNamespaceExplicitOverridesContext(t *testing.T) {
 	}
 }
 
+func TestRunWithFileInputAuditLogging(t *testing.T) {
+	// Test: File-based commands (apply -f) should write to audit log
+	tmpDir := t.TempDir()
+	auditPath := filepath.Join(tmpDir, "audit.log")
+
+	manifestPath := filepath.Join(tmpDir, "deploy.yaml")
+	content := `apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: test-ns`
+	os.WriteFile(manifestPath, []byte(content), 0644)
+
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    auditPath,
+		},
+	}
+
+	runner := &Runner{
+		stdin:               strings.NewReader("y\n"), // Confirm
+		stdout:              &bytes.Buffer{},
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test-cluster" },
+		getContextNamespace: func(ctx string) string { return "default" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	err := runner.Run([]string{"apply", "-f", manifestPath})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	// Check if audit log was written
+	auditContent, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatalf("Audit log should exist: %v", err)
+	}
+
+	if len(auditContent) == 0 {
+		t.Error("Audit log should not be empty")
+	}
+
+	content2 := string(auditContent)
+	if !strings.Contains(content2, "EXECUTED") {
+		t.Errorf("Audit log should contain EXECUTED, got: %s", content2)
+	}
+	if !strings.Contains(content2, "apply") {
+		t.Errorf("Audit log should contain operation 'apply', got: %s", content2)
+	}
+	if !strings.Contains(content2, "Pod/nginx") {
+		t.Errorf("Audit log should contain resource 'Pod/nginx', got: %s", content2)
+	}
+}
+
+func TestRunWithFileInputAuditLoggingDenied(t *testing.T) {
+	// Test: Denied file-based commands should also be logged
+	tmpDir := t.TempDir()
+	auditPath := filepath.Join(tmpDir, "audit.log")
+
+	manifestPath := filepath.Join(tmpDir, "deploy.yaml")
+	content := `apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx`
+	os.WriteFile(manifestPath, []byte(content), 0644)
+
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"apply"},
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    auditPath,
+		},
+	}
+
+	runner := &Runner{
+		stdin:               strings.NewReader("n\n"), // Deny
+		stdout:              &bytes.Buffer{},
+		stderr:              &bytes.Buffer{},
+		getCluster:          func() string { return "test-cluster" },
+		getContextNamespace: func(ctx string) string { return "default" },
+		executeKubectl:      func(args []string) error { return nil },
+		loadConfig:          func() (*config.Config, error) { return cfg, nil },
+	}
+
+	err := runner.Run([]string{"apply", "-f", manifestPath})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	// Check if audit log was written
+	auditContent, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatalf("Audit log should exist: %v", err)
+	}
+
+	content2 := string(auditContent)
+	if !strings.Contains(content2, "DENIED") {
+		t.Errorf("Audit log should contain DENIED for denied operation, got: %s", content2)
+	}
+}
+
+func TestContextFlagNamespaceResolution(t *testing.T) {
+	// Test: When --context is provided, namespace should come from that context
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader("n\n"),
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func(ctx string) string {
+			// Return different namespace based on context
+			if ctx == "other-cluster" {
+				return "other-ns"
+			}
+			return "current-ns"
+		},
+		executeKubectl: func(args []string) error { return nil },
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	// User specifies --context, should use that context's namespace
+	runner.Run([]string{"--context", "other-cluster", "delete", "pod", "nginx"})
+
+	output := stdout.String()
+	// Should show namespace from "other-cluster" context
+	if !strings.Contains(output, "other-ns") {
+		t.Errorf("Expected namespace 'other-ns' from specified context, got: %s", output)
+	}
+}
+
+func TestRunDryRunSkipsWarning(t *testing.T) {
+	// Dry-run commands should NOT trigger warnings
+	executed := false
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader(""),
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func(ctx string) string { return "default" },
+		executeKubectl: func(args []string) error {
+			executed = true
+			return nil
+		},
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	// --dry-run should not trigger warning
+	err := runner.Run([]string{"delete", "pod", "nginx", "--dry-run=client"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !executed {
+		t.Error("expected kubectl to be executed for dry-run")
+	}
+
+	output := stdout.String()
+	if strings.Contains(output, "DANGEROUS OPERATION DETECTED") {
+		t.Error("dry-run should not trigger dangerous operation warning")
+	}
+}
+
+func TestRunDryRunFileInputSkipsWarning(t *testing.T) {
+	// Bug: File-based commands (apply -f) with --dry-run should also skip warnings
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "deploy.yaml")
+	content := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: kube-system`
+	os.WriteFile(manifestPath, []byte(content), 0644)
+
+	executed := false
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader(""), // No confirmation input needed
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func(ctx string) string { return "default" },
+		executeKubectl: func(args []string) error {
+			executed = true
+			return nil
+		},
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	// apply -f with --dry-run should NOT trigger warning
+	err := runner.Run([]string{"apply", "-f", manifestPath, "--dry-run=client"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !executed {
+		t.Error("expected kubectl to be executed for dry-run")
+	}
+
+	output := stdout.String()
+	if strings.Contains(output, "DANGEROUS OPERATION DETECTED") {
+		t.Error("dry-run file-based command should not trigger dangerous operation warning")
+	}
+}
+
+func TestRunAllNamespacesRequiresConfirmation(t *testing.T) {
+	// --all-namespaces should ALWAYS require confirmation, even in warn-only mode
+	executed := false
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader("n\n"), // Deny
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func(ctx string) string { return "default" },
+		executeKubectl: func(args []string) error {
+			executed = true
+			return nil
+		},
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Mode = config.ModeWarnOnly // Even in warn-only mode
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	err := runner.Run([]string{"delete", "pods", "--all", "-A"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if executed {
+		t.Error("expected kubectl NOT to be executed when all-namespaces denied")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "ALL NAMESPACES") {
+		t.Errorf("expected warning about ALL NAMESPACES, got: %s", output)
+	}
+}
+
+func TestRunNodeScopedNoNamespace(t *testing.T) {
+	// Node-scoped operations (drain, cordon) should not show namespace
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader("n\n"),
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func(ctx string) string { return "some-namespace" },
+		executeKubectl: func(args []string) error {
+			return nil
+		},
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	err := runner.Run([]string{"drain", "node-1", "--ignore-daemonsets"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	// Should not show "Namespace:" line for node-scoped operations
+	if strings.Contains(output, "Namespace:") {
+		t.Errorf("node-scoped operations should not show namespace, got: %s", output)
+	}
+}
+
 func TestIntegrationFileParseError(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "invalid.yaml")
@@ -691,7 +997,7 @@ func TestIntegrationFileParseError(t *testing.T) {
 		stdout:              &bytes.Buffer{},
 		stderr:              &bytes.Buffer{},
 		getCluster:          func() string { return "test" },
-		getContextNamespace: func() string { return "default" },
+		getContextNamespace: func(ctx string) string { return "default" },
 		executeKubectl:      func(args []string) error { return nil },
 		loadConfig:          func() (*config.Config, error) { return cfg, nil },
 	}

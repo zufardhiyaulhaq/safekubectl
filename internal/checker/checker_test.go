@@ -378,3 +378,79 @@ func TestCheckResourcesSafeOperation(t *testing.T) {
 		t.Error("Expected IsDangerous=false for get operation")
 	}
 }
+
+func TestCheckAllNamespaces(t *testing.T) {
+	cfg := &config.Config{
+		Mode:                config.ModeWarnOnly, // Even in warn-only mode
+		DangerousOperations: []string{"delete"},
+		ProtectedNamespaces: []string{},
+		ProtectedClusters:   []string{},
+	}
+
+	chk := New(cfg)
+	cmd := parser.Parse([]string{"delete", "pods", "--all", "-A"})
+	result := chk.Check(cmd, "dev-cluster")
+
+	if !result.IsDangerous {
+		t.Error("Expected IsDangerous=true for all-namespaces delete")
+	}
+
+	if !result.RequiresConfirmation {
+		t.Error("Expected RequiresConfirmation=true for all-namespaces (always)")
+	}
+
+	if !result.IsAllNamespaces {
+		t.Error("Expected IsAllNamespaces=true")
+	}
+
+	// Should have reason mentioning all namespaces
+	found := false
+	for _, r := range result.Reasons {
+		if contains(r, "ALL NAMESPACES") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected reason about ALL NAMESPACES, got: %v", result.Reasons)
+	}
+}
+
+func TestCheckDryRun(t *testing.T) {
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"delete"},
+		ProtectedNamespaces: []string{"production"},
+		ProtectedClusters:   []string{"prod-cluster"},
+	}
+
+	chk := New(cfg)
+	// Even with protected namespace and cluster, dry-run should be safe
+	cmd := parser.Parse([]string{"delete", "pod", "nginx", "-n", "production", "--dry-run=client"})
+	result := chk.Check(cmd, "prod-cluster")
+
+	if result.IsDangerous {
+		t.Error("Expected IsDangerous=false for dry-run")
+	}
+
+	if result.RequiresConfirmation {
+		t.Error("Expected RequiresConfirmation=false for dry-run")
+	}
+
+	if !result.IsDryRun {
+		t.Error("Expected IsDryRun=true")
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

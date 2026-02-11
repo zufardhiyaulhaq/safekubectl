@@ -23,7 +23,8 @@ func ParseJSON(content []byte, source string) ([]Resource, error) {
 
 	var resources []Resource
 
-	if doc.Kind == "List" && len(doc.Items) > 0 {
+	// Handle List kind - return items, not the List itself
+	if doc.Kind == "List" {
 		for _, item := range doc.Items {
 			if item.Kind == "" {
 				continue

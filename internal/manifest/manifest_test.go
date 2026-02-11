@@ -227,6 +227,20 @@ func TestParseJSONList(t *testing.T) {
 	}
 }
 
+func TestParseJSONEmptyList(t *testing.T) {
+	// Bug: Empty list was returning "List" as a resource instead of empty
+	content := `{"apiVersion":"v1","kind":"List","items":[]}`
+
+	resources, err := ParseJSON([]byte(content), "empty-list.json")
+	if err != nil {
+		t.Fatalf("ParseJSON() error = %v", err)
+	}
+
+	if len(resources) != 0 {
+		t.Errorf("Expected 0 resources for empty List, got %d: %v", len(resources), resources)
+	}
+}
+
 func TestParseFileYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yaml")

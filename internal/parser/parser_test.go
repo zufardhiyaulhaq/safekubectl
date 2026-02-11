@@ -128,7 +128,7 @@ func TestParse(t *testing.T) {
 			expected: &KubectlCommand{
 				Operation: "exec",
 				Resource:  "nginx",
-				Name:      "/bin/sh",
+				Name:      "", // Args after -- are command args, not kubectl args
 				Namespace: "",
 				Args:      []string{"exec", "-it", "nginx", "--", "/bin/sh"},
 			},
@@ -534,6 +534,286 @@ func TestRolloutRestartParsing(t *testing.T) {
 			}
 			if result.Name != tt.expectedName {
 				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			}
+		})
+	}
+}
+
+func TestAllNamespacesFlag(t *testing.T) {
+	tests := []struct {
+		name              string
+		args              []string
+		expectedAllNS     bool
+	}{
+		{"long flag", []string{"delete", "pods", "--all", "--all-namespaces"}, true},
+		{"short flag", []string{"delete", "pods", "--all", "-A"}, true},
+		{"flag before operation", []string{"-A", "get", "pods"}, true},
+		{"no flag", []string{"delete", "pods"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.AllNamespaces != tt.expectedAllNS {
+				t.Errorf("AllNamespaces = %v, expected %v", result.AllNamespaces, tt.expectedAllNS)
+			}
+		})
+	}
+}
+
+func TestDryRunFlag(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           []string
+		expectedDryRun bool
+	}{
+		{"dry-run=client", []string{"delete", "pod", "nginx", "--dry-run=client"}, true},
+		{"dry-run=server", []string{"delete", "pod", "nginx", "--dry-run=server"}, true},
+		{"dry-run without value", []string{"delete", "pod", "nginx", "--dry-run"}, true},
+		{"no dry-run", []string{"delete", "pod", "nginx"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.DryRun != tt.expectedDryRun {
+				t.Errorf("DryRun = %v, expected %v", result.DryRun, tt.expectedDryRun)
+			}
+		})
+	}
+}
+
+func TestDoubleDashSeparator(t *testing.T) {
+	// Everything after -- should be ignored for parsing
+	tests := []struct {
+		name             string
+		args             []string
+		expectedResource string
+		expectedName     string
+	}{
+		{
+			name:             "exec with -- separator",
+			args:             []string{"exec", "nginx", "--", "/bin/sh", "-c", "ls"},
+			expectedResource: "nginx",
+			expectedName:     "", // /bin/sh should NOT be parsed as name
+		},
+		{
+			name:             "exec with -it and -- separator",
+			args:             []string{"exec", "-it", "nginx", "--", "/bin/bash"},
+			expectedResource: "nginx",
+			expectedName:     "",
+		},
+		{
+			name:             "run with -- separator",
+			args:             []string{"run", "test-pod", "--image=nginx", "--", "sleep", "3600"},
+			expectedResource: "test-pod",
+			expectedName:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			}
+			if result.Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q (args after -- should be ignored)", result.Name, tt.expectedName)
+			}
+		})
+	}
+}
+
+func TestKustomizeFlag(t *testing.T) {
+	// Bug: -k flag value was being parsed as resource/name
+	tests := []struct {
+		name             string
+		args             []string
+		expectedResource string
+		expectedName     string
+	}{
+		{
+			name:             "apply -k directory",
+			args:             []string{"apply", "-k", "./kustomize"},
+			expectedResource: "", // -k path should not be parsed as resource
+			expectedName:     "",
+		},
+		{
+			name:             "apply -k=directory",
+			args:             []string{"apply", "-k=./overlays/prod"},
+			expectedResource: "",
+			expectedName:     "",
+		},
+		{
+			name:             "apply --kustomize directory",
+			args:             []string{"apply", "--kustomize", "./base"},
+			expectedResource: "",
+			expectedName:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			}
+			if result.Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			}
+		})
+	}
+}
+
+func TestFlagsWithValues(t *testing.T) {
+	// Test that flag values are not parsed as resource/name
+	tests := []struct {
+		name             string
+		args             []string
+		expectedResource string
+		expectedName     string
+	}{
+		{
+			name:             "logs --tail value not parsed as name",
+			args:             []string{"logs", "nginx", "--tail", "100"},
+			expectedResource: "nginx",
+			expectedName:     "",
+		},
+		{
+			name:             "logs --since value not parsed as name",
+			args:             []string{"logs", "nginx", "--since", "1h"},
+			expectedResource: "nginx",
+			expectedName:     "",
+		},
+		{
+			name:             "port-forward --address value not parsed as resource",
+			args:             []string{"port-forward", "--address", "0.0.0.0", "nginx", "8080:80"},
+			expectedResource: "nginx",
+			expectedName:     "8080:80",
+		},
+		{
+			name:             "run --image value not parsed",
+			args:             []string{"run", "nginx", "--image", "nginx:latest"},
+			expectedResource: "nginx",
+			expectedName:     "",
+		},
+		{
+			name:             "scale --replicas value not parsed",
+			args:             []string{"scale", "deployment/nginx", "--replicas", "3"},
+			expectedResource: "deployment",
+			expectedName:     "nginx",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			}
+			if result.Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			}
+		})
+	}
+}
+
+func TestSetCommandSubcommands(t *testing.T) {
+	// Bug: "set image" was parsing "image" as Resource instead of skipping the subcommand
+	tests := []struct {
+		name             string
+		args             []string
+		expectedResource string
+		expectedName     string
+	}{
+		{
+			name:             "set image deployment/nginx",
+			args:             []string{"set", "image", "deployment/nginx", "nginx=nginx:1.16"},
+			expectedResource: "deployment",
+			expectedName:     "nginx",
+		},
+		{
+			name:             "set env deployment nginx",
+			args:             []string{"set", "env", "deployment", "nginx", "DEBUG=true"},
+			expectedResource: "deployment",
+			expectedName:     "nginx",
+		},
+		{
+			name:             "set resources deployment/nginx",
+			args:             []string{"set", "resources", "deployment/nginx", "--limits=cpu=200m"},
+			expectedResource: "deployment",
+			expectedName:     "nginx",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.Operation != "set" {
+				t.Errorf("Operation = %q, expected %q", result.Operation, "set")
+			}
+			if result.Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			}
+			if result.Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			}
+		})
+	}
+}
+
+func TestGlobalFlagsWithEqualsSyntax(t *testing.T) {
+	// Bug: --namespace=value before operation was causing findOperation
+	// to incorrectly skip the operation (apply) because it thought there
+	// was a separate value argument to skip
+	tests := []struct {
+		name              string
+		args              []string
+		expectedOperation string
+		expectedNamespace string
+		expectedFileInput []string
+	}{
+		{
+			name:              "namespace= before apply -f",
+			args:              []string{"--namespace=production", "apply", "-f", "deploy.yaml"},
+			expectedOperation: "apply",
+			expectedNamespace: "production",
+			expectedFileInput: []string{"deploy.yaml"},
+		},
+		{
+			name:              "context= before delete",
+			args:              []string{"--context=prod-cluster", "delete", "pod", "nginx"},
+			expectedOperation: "delete",
+			expectedNamespace: "",
+			expectedFileInput: nil,
+		},
+		{
+			name:              "multiple = flags before operation",
+			args:              []string{"--namespace=staging", "--context=dev", "apply", "-f", "svc.yaml"},
+			expectedOperation: "apply",
+			expectedNamespace: "staging",
+			expectedFileInput: []string{"svc.yaml"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+
+			if result.Operation != tt.expectedOperation {
+				t.Errorf("Operation = %q, expected %q", result.Operation, tt.expectedOperation)
+			}
+			if result.Namespace != tt.expectedNamespace {
+				t.Errorf("Namespace = %q, expected %q", result.Namespace, tt.expectedNamespace)
+			}
+			if !reflect.DeepEqual(result.FileInputs, tt.expectedFileInput) {
+				t.Errorf("FileInputs = %v, expected %v", result.FileInputs, tt.expectedFileInput)
 			}
 		})
 	}

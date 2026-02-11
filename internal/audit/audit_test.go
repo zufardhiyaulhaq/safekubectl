@@ -8,6 +8,7 @@ import (
 
 	"github.com/zufardhiyaulhaq/safekubectl/internal/checker"
 	"github.com/zufardhiyaulhaq/safekubectl/internal/config"
+	"github.com/zufardhiyaulhaq/safekubectl/internal/manifest"
 )
 
 func TestNew(t *testing.T) {
@@ -327,5 +328,160 @@ func TestLogInvalidPath(t *testing.T) {
 	// Should return error for invalid path
 	if err == nil {
 		t.Error("expected error for invalid path, got nil")
+	}
+}
+
+func TestLogResourcesEnabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.ResourceCheckResult{
+		Operation: "apply",
+		Cluster:   "prod-cluster",
+		Resources: []manifest.Resource{
+			{Kind: "Deployment", Name: "nginx", Namespace: "production"},
+			{Kind: "Service", Name: "nginx-svc", Namespace: "production"},
+		},
+		Reasons: []string{"dangerous operation: apply"},
+	}
+
+	err := logger.LogResources(result, []string{"apply", "-f", "deploy.yaml"}, true, true)
+	if err != nil {
+		t.Fatalf("LogResources() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// Verify log entry contains expected fields
+	expectedParts := []string{
+		"EXECUTED",
+		"operation=apply",
+		"cluster=prod-cluster",
+		"Deployment/nginx@production",
+		"Service/nginx-svc@production",
+		"confirmed=true",
+	}
+
+	for _, part := range expectedParts {
+		if !strings.Contains(logContent, part) {
+			t.Errorf("log entry missing %q, got:\n%s", part, logContent)
+		}
+	}
+}
+
+func TestLogResourcesDisabled(t *testing.T) {
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: false,
+			Path:    "/tmp/test-audit.log",
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.ResourceCheckResult{
+		Operation: "apply",
+		Cluster:   "test-cluster",
+		Resources: []manifest.Resource{
+			{Kind: "Pod", Name: "test", Namespace: "default"},
+		},
+	}
+
+	err := logger.LogResources(result, []string{"apply", "-f", "pod.yaml"}, true, true)
+	if err != nil {
+		t.Errorf("LogResources() with disabled audit returned error: %v", err)
+	}
+
+	// File should not exist since audit is disabled
+	if _, err := os.Stat(cfg.Audit.Path); !os.IsNotExist(err) {
+		os.Remove(cfg.Audit.Path)
+		t.Error("LogResources() created file when audit is disabled")
+	}
+}
+
+func TestLogResourcesDenied(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.ResourceCheckResult{
+		Operation: "delete",
+		Cluster:   "prod-cluster",
+		Resources: []manifest.Resource{
+			{Kind: "Deployment", Name: "critical", Namespace: "kube-system"},
+		},
+	}
+
+	err := logger.LogResources(result, []string{"delete", "-f", "deploy.yaml"}, false, false)
+	if err != nil {
+		t.Fatalf("LogResources() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	if !strings.Contains(logContent, "DENIED") {
+		t.Errorf("expected log to contain 'DENIED', got:\n%s", logContent)
+	}
+}
+
+func TestLogResourcesEmptyNamespace(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.ResourceCheckResult{
+		Operation: "apply",
+		Cluster:   "test-cluster",
+		Resources: []manifest.Resource{
+			{Kind: "ClusterRole", Name: "admin", Namespace: ""}, // Cluster-scoped
+		},
+	}
+
+	err := logger.LogResources(result, []string{"apply", "-f", "clusterrole.yaml"}, true, true)
+	if err != nil {
+		t.Fatalf("LogResources() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// Empty namespace should default to "default" in log
+	if !strings.Contains(logContent, "ClusterRole/admin@default") {
+		t.Errorf("expected empty namespace to show as 'default', got:\n%s", logContent)
 	}
 }

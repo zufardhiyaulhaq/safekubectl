@@ -11,6 +11,8 @@ type CheckResult struct {
 	IsDangerous          bool
 	RequiresConfirmation bool
 	IsNodeScoped         bool
+	IsAllNamespaces      bool
+	IsDryRun             bool
 	Operation            string
 	Resource             string
 	Namespace            string
@@ -36,12 +38,19 @@ func (c *Checker) Check(cmd *parser.KubectlCommand, cluster string) *CheckResult
 	isNodeScoped := cmd.IsNodeScoped()
 
 	result := &CheckResult{
-		Operation:    cmd.Operation,
-		Resource:     cmd.GetResourceDisplay(),
-		Namespace:    namespace,
-		Cluster:      cluster,
-		IsNodeScoped: isNodeScoped,
-		Reasons:      []string{},
+		Operation:       cmd.Operation,
+		Resource:        cmd.GetResourceDisplay(),
+		Namespace:       namespace,
+		Cluster:         cluster,
+		IsNodeScoped:    isNodeScoped,
+		IsAllNamespaces: cmd.AllNamespaces,
+		IsDryRun:        cmd.DryRun,
+		Reasons:         []string{},
+	}
+
+	// Dry-run commands are safe - they don't actually execute
+	if cmd.DryRun {
+		return result
 	}
 
 	// Only check if operation is dangerous first
@@ -53,8 +62,14 @@ func (c *Checker) Check(cmd *parser.KubectlCommand, cluster string) *CheckResult
 	result.IsDangerous = true
 	result.Reasons = append(result.Reasons, "dangerous operation: "+cmd.Operation)
 
-	// Add additional context if in protected namespace/cluster
-	if c.config.IsProtectedNamespace(namespace) {
+	// All-namespaces is especially dangerous
+	if cmd.AllNamespaces {
+		result.Reasons = append(result.Reasons, "AFFECTS ALL NAMESPACES (-A/--all-namespaces)")
+		result.RequiresConfirmation = true // Always require confirmation for all-namespaces
+	}
+
+	// Add additional context if in protected namespace/cluster (only if not all-namespaces)
+	if !cmd.AllNamespaces && !isNodeScoped && c.config.IsProtectedNamespace(namespace) {
 		result.Reasons = append(result.Reasons, "protected namespace: "+namespace)
 	}
 	if c.config.IsProtectedCluster(cluster) {
@@ -62,7 +77,9 @@ func (c *Checker) Check(cmd *parser.KubectlCommand, cluster string) *CheckResult
 	}
 
 	// Determine if confirmation is required
-	result.RequiresConfirmation = c.config.RequiresConfirmation(namespace, cluster)
+	if !result.RequiresConfirmation {
+		result.RequiresConfirmation = c.config.RequiresConfirmation(namespace, cluster)
+	}
 
 	return result
 }

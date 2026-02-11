@@ -6,14 +6,16 @@ import (
 
 // KubectlCommand represents a parsed kubectl command
 type KubectlCommand struct {
-	Operation  string   // e.g., delete, apply, get
-	Resource   string   // e.g., pod, deployment, pod/nginx
-	Name       string   // e.g., nginx (if separate from resource)
-	Namespace  string   // from -n or --namespace flag
-	Context    string   // from --context flag
-	Args       []string // original arguments
-	FileInputs []string // paths/URLs from -f/--filename flags
-	Recursive  bool     // -R/--recursive flag present
+	Operation     string   // e.g., delete, apply, get
+	Resource      string   // e.g., pod, deployment, pod/nginx
+	Name          string   // e.g., nginx (if separate from resource)
+	Namespace     string   // from -n or --namespace flag
+	Context       string   // from --context flag
+	Args          []string // original arguments
+	FileInputs    []string // paths/URLs from -f/--filename flags
+	Recursive     bool     // -R/--recursive flag present
+	AllNamespaces bool     // --all-namespaces or -A flag present
+	DryRun        bool     // --dry-run flag present
 }
 
 // Node-scoped operations that don't have a namespace
@@ -41,6 +43,7 @@ var fileInputOperations = map[string]bool{
 var operationsWithSubcommands = map[string][]string{
 	"rollout": {"restart", "status", "undo", "history", "pause", "resume"},
 	"config":  {"view", "use-context", "set-context", "delete-context", "get-contexts", "current-context"},
+	"set":     {"image", "env", "resources", "selector", "serviceaccount", "subject"},
 }
 
 // Parse parses kubectl arguments and extracts command info
@@ -93,8 +96,33 @@ func Parse(args []string) *KubectlCommand {
 			continue
 		}
 
+		// Handle all-namespaces flag
+		if args[i] == "-A" || args[i] == "--all-namespaces" {
+			cmd.AllNamespaces = true
+			i++
+			continue
+		}
+
+		// Handle dry-run flag
+		if args[i] == "--dry-run" || strings.HasPrefix(args[i], "--dry-run=") {
+			cmd.DryRun = true
+			i++
+			continue
+		}
+
 		// Handle flags with values
-		if needsValue(args[i]) && i+1 < len(args) {
+		// If flag contains =, value is already embedded
+		if strings.Contains(args[i], "=") {
+			// Check for namespace/context with embedded value
+			if strings.HasPrefix(args[i], "-n=") {
+				cmd.Namespace = strings.TrimPrefix(args[i], "-n=")
+			} else if strings.HasPrefix(args[i], "--namespace=") {
+				cmd.Namespace = strings.TrimPrefix(args[i], "--namespace=")
+			} else if strings.HasPrefix(args[i], "--context=") {
+				cmd.Context = strings.TrimPrefix(args[i], "--context=")
+			}
+			i++
+		} else if needsValue(args[i]) && i+1 < len(args) {
 			// Check for namespace flag
 			if args[i] == "-n" || args[i] == "--namespace" {
 				cmd.Namespace = args[i+1]
@@ -104,15 +132,6 @@ func Parse(args []string) *KubectlCommand {
 				cmd.Context = args[i+1]
 			}
 			i += 2
-		} else if strings.HasPrefix(args[i], "-n=") {
-			cmd.Namespace = strings.TrimPrefix(args[i], "-n=")
-			i++
-		} else if strings.HasPrefix(args[i], "--namespace=") {
-			cmd.Namespace = strings.TrimPrefix(args[i], "--namespace=")
-			i++
-		} else if strings.HasPrefix(args[i], "--context=") {
-			cmd.Context = strings.TrimPrefix(args[i], "--context=")
-			i++
 		} else {
 			i++
 		}
@@ -140,6 +159,11 @@ func Parse(args []string) *KubectlCommand {
 	for i < len(args) {
 		arg := args[i]
 
+		// Stop parsing at -- separator (everything after is command args, not kubectl args)
+		if arg == "--" {
+			break
+		}
+
 		// Handle file input flags (only for operations that use -f for files)
 		if usesFileInput {
 			if arg == "-f" || arg == "--filename" {
@@ -162,6 +186,20 @@ func Parse(args []string) *KubectlCommand {
 		// Handle recursive flag
 		if arg == "-R" || arg == "--recursive" {
 			cmd.Recursive = true
+			i++
+			continue
+		}
+
+		// Handle all-namespaces flag
+		if arg == "-A" || arg == "--all-namespaces" {
+			cmd.AllNamespaces = true
+			i++
+			continue
+		}
+
+		// Handle dry-run flag
+		if arg == "--dry-run" || strings.HasPrefix(arg, "--dry-run=") {
+			cmd.DryRun = true
 			i++
 			continue
 		}
@@ -198,7 +236,10 @@ func Parse(args []string) *KubectlCommand {
 
 		// Skip other flags
 		if strings.HasPrefix(arg, "-") {
-			if needsValue(arg) && i+1 < len(args) {
+			// If flag contains =, value is already embedded, don't skip next arg
+			if strings.Contains(arg, "=") {
+				i++
+			} else if needsValue(arg) && i+1 < len(args) {
 				i += 2
 			} else {
 				i++
@@ -233,6 +274,10 @@ func findOperation(args []string) string {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if strings.HasPrefix(arg, "-") {
+			// If flag contains =, value is embedded, don't skip next arg
+			if strings.Contains(arg, "=") {
+				continue
+			}
 			// Skip flag and its value if needed
 			if needsValue(arg) && i+1 < len(args) {
 				i++
@@ -250,6 +295,7 @@ func needsValue(flag string) bool {
 	valueFlags := []string{
 		"-n", "--namespace",
 		"-f", "--filename",
+		"-k", "--kustomize",
 		"-l", "--selector",
 		"-o", "--output",
 		"--context",
@@ -264,6 +310,14 @@ func needsValue(flag string) bool {
 		"--type",
 		"--timeout",
 		"--grace-period",
+		"--tail",
+		"--since",
+		"--since-time",
+		"--limit-bytes",
+		"--address",
+		"--image",
+		"--replicas",
+		"--for",
 	}
 
 	// Strip = suffix if present
