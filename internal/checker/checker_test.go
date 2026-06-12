@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/zufardhiyaulhaq/safekubectl/internal/config"
@@ -256,8 +257,8 @@ func TestCheckResultFields(t *testing.T) {
 		t.Errorf("Operation: got %q, expected %q", result.Operation, "delete")
 	}
 
-	if result.Resource != "pod/nginx" {
-		t.Errorf("Resource: got %q, expected %q", result.Resource, "pod/nginx")
+	if !reflect.DeepEqual(result.Resources, []string{"pod/nginx"}) {
+		t.Errorf("Resources: got %v, expected %v", result.Resources, []string{"pod/nginx"})
 	}
 
 	if result.Namespace != "production" {
@@ -439,6 +440,24 @@ func TestCheckDryRun(t *testing.T) {
 
 	if !result.IsDryRun {
 		t.Error("Expected IsDryRun=true")
+	}
+}
+
+func TestCheckResultMultipleResources(t *testing.T) {
+	cfg := &config.Config{
+		Mode:                config.ModeConfirm,
+		DangerousOperations: []string{"delete"},
+		ProtectedNamespaces: []string{},
+		ProtectedClusters:   []string{},
+	}
+
+	chk := New(cfg)
+	cmd := parser.Parse([]string{"delete", "secret", "cert-a", "cert-b", "-n", "istio-system"})
+	result := chk.Check(cmd, "prod-cluster")
+
+	expected := []string{"secret/cert-a", "secret/cert-b"}
+	if !reflect.DeepEqual(result.Resources, expected) {
+		t.Errorf("Resources: got %v, expected %v", result.Resources, expected)
 	}
 }
 

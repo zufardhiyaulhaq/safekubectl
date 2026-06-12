@@ -4,11 +4,16 @@ import (
 	"strings"
 )
 
+// Target is one object a kubectl command operates on
+type Target struct {
+	Resource string // e.g. "secret", "pod"
+	Name     string // empty for type-only targets (e.g. delete pods -l app=x)
+}
+
 // KubectlCommand represents a parsed kubectl command
 type KubectlCommand struct {
 	Operation     string   // e.g., delete, apply, get
-	Resource      string   // e.g., pod, deployment, pod/nginx
-	Name          string   // e.g., nginx (if separate from resource)
+	Targets       []Target // all positional targets (resource type + optional name)
 	Namespace     string   // from -n or --namespace flag
 	Context       string   // from --context flag
 	Args          []string // original arguments
@@ -156,6 +161,7 @@ func Parse(args []string) *KubectlCommand {
 	}
 
 	// Parse remaining arguments for resource, name, namespace, and context
+	var positionals []string
 	for i < len(args) {
 		arg := args[i]
 
@@ -247,24 +253,12 @@ func Parse(args []string) *KubectlCommand {
 			continue
 		}
 
-		// This should be resource or resource/name
-		if cmd.Resource == "" {
-			// Check if it's resource/name format
-			if strings.Contains(arg, "/") {
-				parts := strings.SplitN(arg, "/", 2)
-				cmd.Resource = parts[0]
-				if len(parts) > 1 {
-					cmd.Name = parts[1]
-				}
-			} else {
-				cmd.Resource = arg
-			}
-		} else if cmd.Name == "" {
-			// Second positional arg is the name
-			cmd.Name = arg
-		}
+		// Positional arg: part of the command's targets
+		positionals = append(positionals, arg)
 		i++
 	}
+
+	cmd.Targets = buildTargets(positionals)
 
 	return cmd
 }
@@ -331,18 +325,6 @@ func needsValue(flag string) bool {
 	return false
 }
 
-// GetResourceDisplay returns a display string for the resource
-func (k *KubectlCommand) GetResourceDisplay() string {
-	if k.Resource == "" {
-		return "<unknown>"
-	}
-
-	if k.Name != "" {
-		return k.Resource + "/" + k.Name
-	}
-	return k.Resource
-}
-
 // GetNamespaceDisplay returns namespace or "default" if empty
 func (k *KubectlCommand) GetNamespaceDisplay() string {
 	if k.Namespace == "" {
@@ -354,4 +336,78 @@ func (k *KubectlCommand) GetNamespaceDisplay() string {
 // IsNodeScoped returns true if the operation is node-scoped (no namespace)
 func (k *KubectlCommand) IsNodeScoped() bool {
 	return nodeScopedOperations[k.Operation]
+}
+
+// buildTargets interprets positional args using kubectl's rules:
+// slash-form (TYPE/NAME ...) or type-spec form (TYPE[,TYPE...] [NAME ...]).
+// Args containing "=" are never targets (taint specs, env vars, set image
+// pairs) and are ignored.
+func buildTargets(positionals []string) []Target {
+	var targetArgs []string
+	for _, arg := range positionals {
+		if strings.Contains(arg, "=") {
+			continue
+		}
+		targetArgs = append(targetArgs, arg)
+	}
+
+	if len(targetArgs) == 0 {
+		return nil
+	}
+
+	// Slash form: every arg is TYPE/NAME
+	if strings.Contains(targetArgs[0], "/") {
+		targets := make([]Target, 0, len(targetArgs))
+		for _, arg := range targetArgs {
+			parts := strings.SplitN(arg, "/", 2)
+			t := Target{Resource: parts[0]}
+			if len(parts) == 2 {
+				t.Name = parts[1]
+			}
+			targets = append(targets, t)
+		}
+		return targets
+	}
+
+	// Type-spec form: first arg is TYPE[,TYPE...], remaining args are names.
+	// kubectl resolves each name against each type (cross product).
+	types := strings.Split(targetArgs[0], ",")
+	names := targetArgs[1:]
+
+	if len(names) == 0 {
+		targets := make([]Target, 0, len(types))
+		for _, typ := range types {
+			targets = append(targets, Target{Resource: typ})
+		}
+		return targets
+	}
+
+	// Name-major order (deliberate; kubectl emits type-major) - only set
+	// membership matters here, ordering is for display
+	targets := make([]Target, 0, len(types)*len(names))
+	for _, name := range names {
+		for _, typ := range types {
+			targets = append(targets, Target{Resource: typ, Name: name})
+		}
+	}
+	return targets
+}
+
+// GetResourceDisplays returns a display string per target
+func (k *KubectlCommand) GetResourceDisplays() []string {
+	if len(k.Targets) == 0 {
+		return []string{"<unknown>"}
+	}
+	displays := make([]string, 0, len(k.Targets))
+	for _, t := range k.Targets {
+		switch {
+		case t.Resource == "":
+			displays = append(displays, "<unknown>")
+		case t.Name != "":
+			displays = append(displays, t.Resource+"/"+t.Name)
+		default:
+			displays = append(displays, t.Resource)
+		}
+	}
+	return displays
 }

@@ -14,7 +14,7 @@ type CheckResult struct {
 	IsAllNamespaces      bool
 	IsDryRun             bool
 	Operation            string
-	Resource             string
+	Resources            []string // display string per target, e.g. ["secret/a", "secret/b"]
 	Namespace            string
 	Cluster              string
 	Reasons              []string
@@ -39,7 +39,7 @@ func (c *Checker) Check(cmd *parser.KubectlCommand, cluster string) *CheckResult
 
 	result := &CheckResult{
 		Operation:       cmd.Operation,
-		Resource:        cmd.GetResourceDisplay(),
+		Resources:       cmd.GetResourceDisplays(),
 		Namespace:       namespace,
 		Cluster:         cluster,
 		IsNodeScoped:    isNodeScoped,

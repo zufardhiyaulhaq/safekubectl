@@ -26,7 +26,6 @@ func DisplayWarningTo(w io.Writer, result *checker.CheckResult, args []string) {
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "%s%s  DANGEROUS OPERATION DETECTED%s\n", colorYellow, warningIcon(), colorReset)
 	fmt.Fprintf(w, "├── Operation: %s%s%s\n", colorRed, result.Operation, colorReset)
-	fmt.Fprintf(w, "├── Resource:  %s\n", result.Resource)
 	// Show namespace info based on scope
 	if result.IsAllNamespaces {
 		fmt.Fprintf(w, "├── Namespace: %s⚠ ALL NAMESPACES%s\n", colorRed, colorReset)
@@ -34,6 +33,18 @@ func DisplayWarningTo(w io.Writer, result *checker.CheckResult, args []string) {
 		fmt.Fprintf(w, "├── Namespace: %s\n", result.Namespace)
 	}
 	fmt.Fprintf(w, "├── Cluster:   %s\n", result.Cluster)
+	fmt.Fprintln(w, "├── Resources affected:")
+	resources := result.Resources
+	if len(resources) == 0 {
+		resources = []string{"<unknown>"}
+	}
+	for i, r := range resources {
+		prefix := "│   ├──"
+		if i == len(resources)-1 {
+			prefix = "│   └──"
+		}
+		fmt.Fprintf(w, "%s %s\n", prefix, r)
+	}
 	fmt.Fprintf(w, "└── Command:   kubectl %s\n", strings.Join(args, " "))
 	fmt.Fprintln(w)
 }

@@ -49,11 +49,11 @@ func (l *Logger) Log(result *checker.CheckResult, args []string, confirmed bool,
 		status = "EXECUTED"
 	}
 
-	entry := fmt.Sprintf("[%s] %s | operation=%s resource=%s namespace=%s cluster=%s confirmed=%t command=\"%s\"\n",
+	entry := fmt.Sprintf("[%s] %s | operation=%s resources=[%s] namespace=%s cluster=%s confirmed=%t command=\"%s\"\n",
 		timestamp,
 		status,
 		result.Operation,
-		result.Resource,
+		strings.Join(result.Resources, ","),
 		result.Namespace,
 		result.Cluster,
 		confirmed,

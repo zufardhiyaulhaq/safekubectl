@@ -12,7 +12,7 @@ import (
 func TestDisplayWarningTo(t *testing.T) {
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "production",
 		Cluster:   "prod-cluster",
 	}
@@ -27,7 +27,7 @@ func TestDisplayWarningTo(t *testing.T) {
 		"DANGEROUS OPERATION DETECTED",
 		"Operation:",
 		"delete",
-		"Resource:",
+		"Resources affected:",
 		"pod/nginx",
 		"Namespace:",
 		"production",
@@ -52,10 +52,50 @@ func TestDisplayWarningTo(t *testing.T) {
 	}
 }
 
+func TestDisplayWarningToMultipleResources(t *testing.T) {
+	result := &checker.CheckResult{
+		Operation: "delete",
+		Resources: []string{"secret/cert-a", "secret/cert-b", "secret/cert-c"},
+		Namespace: "istio-system",
+		Cluster:   "prod-cluster",
+	}
+	args := []string{"delete", "secret", "cert-a", "cert-b", "cert-c"}
+
+	var buf bytes.Buffer
+	DisplayWarningTo(&buf, result, args)
+	output := buf.String()
+
+	for _, r := range result.Resources {
+		if !strings.Contains(output, r) {
+			t.Errorf("expected output to contain %q, got:\n%s", r, output)
+		}
+	}
+
+	// Non-last entries branch with ├──, the last closes with └──
+	if !strings.Contains(output, "│   ├── secret/cert-a") {
+		t.Errorf("expected tree branch for first resource, got:\n%s", output)
+	}
+	if !strings.Contains(output, "│   └── secret/cert-c") {
+		t.Errorf("expected closing branch for last resource, got:\n%s", output)
+	}
+
+	// Lines must appear in order: Cluster, Resources affected, each
+	// resource in input order, Command
+	order := []string{"Cluster:", "Resources affected:", "secret/cert-a", "secret/cert-b", "secret/cert-c", "Command:"}
+	prev := -1
+	for _, part := range order {
+		idx := strings.Index(output, part)
+		if idx <= prev {
+			t.Errorf("expected %q after previous section, got:\n%s", part, output)
+		}
+		prev = idx
+	}
+}
+
 func TestDisplayWarningToWithEmptyFields(t *testing.T) {
 	result := &checker.CheckResult{
 		Operation: "",
-		Resource:  "",
+		Resources: nil,
 		Namespace: "",
 		Cluster:   "",
 	}
@@ -65,9 +105,12 @@ func TestDisplayWarningToWithEmptyFields(t *testing.T) {
 	DisplayWarningTo(&buf, result, args)
 	output := buf.String()
 
-	// Should still contain the header
+	// Should still contain the header and a placeholder resource
 	if !strings.Contains(output, "DANGEROUS OPERATION DETECTED") {
 		t.Error("expected output to contain warning header")
+	}
+	if !strings.Contains(output, "<unknown>") {
+		t.Error("expected output to contain <unknown> for empty resources")
 	}
 }
 
@@ -164,7 +207,7 @@ func TestColorConstants(t *testing.T) {
 func TestDisplayWarningContainsColors(t *testing.T) {
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "production",
 		Cluster:   "prod-cluster",
 	}
@@ -189,7 +232,7 @@ func TestDisplayWarningContainsColors(t *testing.T) {
 func TestDisplayWarningAllNamespaces(t *testing.T) {
 	result := &checker.CheckResult{
 		Operation:       "delete",
-		Resource:        "pods",
+		Resources:       []string{"pods"},
 		Namespace:       "",
 		Cluster:         "prod-cluster",
 		IsAllNamespaces: true,
@@ -209,7 +252,7 @@ func TestDisplayWarningAllNamespaces(t *testing.T) {
 func TestDisplayWarningNodeScoped(t *testing.T) {
 	result := &checker.CheckResult{
 		Operation:    "drain",
-		Resource:     "node-1",
+		Resources:    []string{"node-1"},
 		Namespace:    "default", // Should be ignored
 		Cluster:      "prod-cluster",
 		IsNodeScoped: true,

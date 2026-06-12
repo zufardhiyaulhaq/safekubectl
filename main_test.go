@@ -1007,3 +1007,45 @@ func TestIntegrationFileParseError(t *testing.T) {
 		t.Error("Expected error for invalid YAML")
 	}
 }
+
+func TestRunDangerousMultipleTargets(t *testing.T) {
+	// Regression: "delete secret a b c d" must warn about ALL four secrets,
+	// not just the first one
+	executed := false
+	var stdout bytes.Buffer
+
+	runner := &Runner{
+		stdin:  strings.NewReader("y\n"),
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		getCluster: func() string {
+			return "test-cluster"
+		},
+		getContextNamespace: func(ctx string) string { return "istio-system" },
+		executeKubectl: func(args []string) error {
+			executed = true
+			return nil
+		},
+		loadConfig: func() (*config.Config, error) {
+			cfg := config.DefaultConfig()
+			cfg.Audit.Enabled = false
+			return cfg, nil
+		},
+	}
+
+	err := runner.Run([]string{"delete", "secret", "cert-a", "cert-b", "cert-c", "cert-d"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !executed {
+		t.Error("expected kubectl to be executed after confirmation")
+	}
+
+	output := stdout.String()
+	for _, want := range []string{"secret/cert-a", "secret/cert-b", "secret/cert-c", "secret/cert-d"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("warning missing %q, got:\n%s", want, output)
+		}
+	}
+}

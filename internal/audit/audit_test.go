@@ -35,7 +35,7 @@ func TestLogDisabled(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "default",
 		Cluster:   "test-cluster",
 	}
@@ -66,7 +66,7 @@ func TestLogEnabled(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "production",
 		Cluster:   "prod-cluster",
 	}
@@ -88,7 +88,7 @@ func TestLogEnabled(t *testing.T) {
 	expectedParts := []string{
 		"EXECUTED",
 		"operation=delete",
-		"resource=pod/nginx",
+		"resources=[pod/nginx]",
 		"namespace=production",
 		"cluster=prod-cluster",
 		"confirmed=true",
@@ -116,7 +116,7 @@ func TestLogDenied(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "production",
 		Cluster:   "prod-cluster",
 	}
@@ -156,7 +156,7 @@ func TestLogAppendsToExistingFile(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "default",
 		Cluster:   "test-cluster",
 	}
@@ -169,7 +169,7 @@ func TestLogAppendsToExistingFile(t *testing.T) {
 	// Write second entry
 	result2 := &checker.CheckResult{
 		Operation: "apply",
-		Resource:  "deployment/web",
+		Resources: []string{"deployment/web"},
 		Namespace: "staging",
 		Cluster:   "test-cluster",
 	}
@@ -214,7 +214,7 @@ func TestLogCreatesDirectory(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "default",
 		Cluster:   "test-cluster",
 	}
@@ -243,7 +243,7 @@ func TestLogTimestampFormat(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "default",
 		Cluster:   "test-cluster",
 	}
@@ -283,7 +283,7 @@ func TestLogWithSpecialCharactersInCommand(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "patch",
-		Resource:  "deployment/nginx",
+		Resources: []string{"deployment/nginx"},
 		Namespace: "default",
 		Cluster:   "test-cluster",
 	}
@@ -319,7 +319,7 @@ func TestLogInvalidPath(t *testing.T) {
 	logger := New(cfg)
 	result := &checker.CheckResult{
 		Operation: "delete",
-		Resource:  "pod/nginx",
+		Resources: []string{"pod/nginx"},
 		Namespace: "default",
 		Cluster:   "test-cluster",
 	}
@@ -483,5 +483,39 @@ func TestLogResourcesEmptyNamespace(t *testing.T) {
 	// Empty namespace should default to "default" in log
 	if !strings.Contains(logContent, "ClusterRole/admin@default") {
 		t.Errorf("expected empty namespace to show as 'default', got:\n%s", logContent)
+	}
+}
+
+func TestLogMultipleResources(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.CheckResult{
+		Operation: "delete",
+		Resources: []string{"secret/cert-a", "secret/cert-b"},
+		Namespace: "istio-system",
+		Cluster:   "prod-cluster",
+	}
+
+	err := logger.Log(result, []string{"delete", "secret", "cert-a", "cert-b"}, true, true)
+	if err != nil {
+		t.Fatalf("Log() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	if !strings.Contains(string(content), "resources=[secret/cert-a,secret/cert-b]") {
+		t.Errorf("log entry missing resources list, got:\n%s", string(content))
 	}
 }

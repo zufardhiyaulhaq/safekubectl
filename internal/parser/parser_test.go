@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+// firstTarget returns the first parsed target, or a zero Target if none
+func firstTarget(cmd *KubectlCommand) Target {
+	if len(cmd.Targets) == 0 {
+		return Target{}
+	}
+	return cmd.Targets[0]
+}
+
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -16,8 +24,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "",
 				Context:   "",
 				Args:      []string{"delete", "pod", "nginx"},
@@ -28,8 +35,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod/nginx"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "",
 				Args:      []string{"delete", "pod/nginx"},
 			},
@@ -39,8 +45,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx", "-n", "production"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "production",
 				Args:      []string{"delete", "pod", "nginx", "-n", "production"},
 			},
@@ -50,8 +55,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx", "--namespace", "production"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "production",
 				Args:      []string{"delete", "pod", "nginx", "--namespace", "production"},
 			},
@@ -61,8 +65,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx", "-n=production"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "production",
 				Args:      []string{"delete", "pod", "nginx", "-n=production"},
 			},
@@ -72,8 +75,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx", "--namespace=production"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "production",
 				Args:      []string{"delete", "pod", "nginx", "--namespace=production"},
 			},
@@ -83,8 +85,7 @@ func TestParse(t *testing.T) {
 			args: []string{"-n", "production", "delete", "pod", "nginx"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "production",
 				Args:      []string{"-n", "production", "delete", "pod", "nginx"},
 			},
@@ -94,8 +95,7 @@ func TestParse(t *testing.T) {
 			args: []string{"get", "pods"},
 			expected: &KubectlCommand{
 				Operation: "get",
-				Resource:  "pods",
-				Name:      "",
+				Targets:   []Target{{Resource: "pods"}},
 				Namespace: "",
 				Args:      []string{"get", "pods"},
 			},
@@ -105,8 +105,6 @@ func TestParse(t *testing.T) {
 			args: []string{"apply", "-f", "deployment.yaml"},
 			expected: &KubectlCommand{
 				Operation: "apply",
-				Resource:  "",
-				Name:      "",
 				Namespace: "",
 				Args:      []string{"apply", "-f", "deployment.yaml"},
 			},
@@ -116,8 +114,6 @@ func TestParse(t *testing.T) {
 			args: []string{"apply", "-f", "deployment.yaml", "-n", "staging"},
 			expected: &KubectlCommand{
 				Operation: "apply",
-				Resource:  "",
-				Name:      "",
 				Namespace: "staging",
 				Args:      []string{"apply", "-f", "deployment.yaml", "-n", "staging"},
 			},
@@ -127,8 +123,7 @@ func TestParse(t *testing.T) {
 			args: []string{"exec", "-it", "nginx", "--", "/bin/sh"},
 			expected: &KubectlCommand{
 				Operation: "exec",
-				Resource:  "nginx",
-				Name:      "", // Args after -- are command args, not kubectl args
+				Targets:   []Target{{Resource: "nginx"}},
 				Namespace: "",
 				Args:      []string{"exec", "-it", "nginx", "--", "/bin/sh"},
 			},
@@ -138,8 +133,7 @@ func TestParse(t *testing.T) {
 			args: []string{"rollout", "restart", "deployment/nginx"},
 			expected: &KubectlCommand{
 				Operation: "rollout",
-				Resource:  "deployment",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "deployment", Name: "nginx"}},
 				Namespace: "",
 				Args:      []string{"rollout", "restart", "deployment/nginx"},
 			},
@@ -149,8 +143,7 @@ func TestParse(t *testing.T) {
 			args: []string{"drain", "node-1", "--ignore-daemonsets"},
 			expected: &KubectlCommand{
 				Operation: "drain",
-				Resource:  "node-1",
-				Name:      "",
+				Targets:   []Target{{Resource: "node-1"}},
 				Namespace: "",
 				Args:      []string{"drain", "node-1", "--ignore-daemonsets"},
 			},
@@ -160,8 +153,7 @@ func TestParse(t *testing.T) {
 			args: []string{"cordon", "node-1"},
 			expected: &KubectlCommand{
 				Operation: "cordon",
-				Resource:  "node-1",
-				Name:      "",
+				Targets:   []Target{{Resource: "node-1"}},
 				Namespace: "",
 				Args:      []string{"cordon", "node-1"},
 			},
@@ -171,8 +163,7 @@ func TestParse(t *testing.T) {
 			args: []string{"taint", "nodes", "node-1", "key=value:NoSchedule"},
 			expected: &KubectlCommand{
 				Operation: "taint",
-				Resource:  "nodes",
-				Name:      "node-1",
+				Targets:   []Target{{Resource: "nodes", Name: "node-1"}},
 				Namespace: "",
 				Args:      []string{"taint", "nodes", "node-1", "key=value:NoSchedule"},
 			},
@@ -182,8 +173,7 @@ func TestParse(t *testing.T) {
 			args: []string{"patch", "deployment", "nginx", "-p", `{"spec":{"replicas":3}}`},
 			expected: &KubectlCommand{
 				Operation: "patch",
-				Resource:  "deployment",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "deployment", Name: "nginx"}},
 				Namespace: "",
 				Args:      []string{"patch", "deployment", "nginx", "-p", `{"spec":{"replicas":3}}`},
 			},
@@ -193,8 +183,7 @@ func TestParse(t *testing.T) {
 			args: []string{"edit", "configmap", "my-config", "-n", "default"},
 			expected: &KubectlCommand{
 				Operation: "edit",
-				Resource:  "configmap",
-				Name:      "my-config",
+				Targets:   []Target{{Resource: "configmap", Name: "my-config"}},
 				Namespace: "default",
 				Args:      []string{"edit", "configmap", "my-config", "-n", "default"},
 			},
@@ -204,8 +193,6 @@ func TestParse(t *testing.T) {
 			args: []string{},
 			expected: &KubectlCommand{
 				Operation: "",
-				Resource:  "",
-				Name:      "",
 				Namespace: "",
 				Args:      []string{},
 			},
@@ -215,8 +202,7 @@ func TestParse(t *testing.T) {
 			args: []string{"get", "pods", "-o", "yaml"},
 			expected: &KubectlCommand{
 				Operation: "get",
-				Resource:  "pods",
-				Name:      "",
+				Targets:   []Target{{Resource: "pods"}},
 				Namespace: "",
 				Args:      []string{"get", "pods", "-o", "yaml"},
 			},
@@ -226,8 +212,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pods", "-l", "app=nginx", "-n", "default"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pods",
-				Name:      "",
+				Targets:   []Target{{Resource: "pods"}},
 				Namespace: "default",
 				Args:      []string{"delete", "pods", "-l", "app=nginx", "-n", "default"},
 			},
@@ -237,8 +222,7 @@ func TestParse(t *testing.T) {
 			args: []string{"--context", "prod-cluster", "delete", "pod", "nginx"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "",
 				Context:   "prod-cluster",
 				Args:      []string{"--context", "prod-cluster", "delete", "pod", "nginx"},
@@ -249,8 +233,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx", "--context", "prod-cluster"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "",
 				Context:   "prod-cluster",
 				Args:      []string{"delete", "pod", "nginx", "--context", "prod-cluster"},
@@ -261,8 +244,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx", "--context=prod-cluster"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "",
 				Context:   "prod-cluster",
 				Args:      []string{"delete", "pod", "nginx", "--context=prod-cluster"},
@@ -273,8 +255,7 @@ func TestParse(t *testing.T) {
 			args: []string{"delete", "pod", "nginx", "-n", "production", "--context", "prod-cluster"},
 			expected: &KubectlCommand{
 				Operation: "delete",
-				Resource:  "pod",
-				Name:      "nginx",
+				Targets:   []Target{{Resource: "pod", Name: "nginx"}},
 				Namespace: "production",
 				Context:   "prod-cluster",
 				Args:      []string{"delete", "pod", "nginx", "-n", "production", "--context", "prod-cluster"},
@@ -290,12 +271,8 @@ func TestParse(t *testing.T) {
 				t.Errorf("Operation: got %q, expected %q", result.Operation, tt.expected.Operation)
 			}
 
-			if result.Resource != tt.expected.Resource {
-				t.Errorf("Resource: got %q, expected %q", result.Resource, tt.expected.Resource)
-			}
-
-			if result.Name != tt.expected.Name {
-				t.Errorf("Name: got %q, expected %q", result.Name, tt.expected.Name)
+			if !reflect.DeepEqual(result.Targets, tt.expected.Targets) {
+				t.Errorf("Targets: got %v, expected %v", result.Targets, tt.expected.Targets)
 			}
 
 			if result.Namespace != tt.expected.Namespace {
@@ -308,44 +285,6 @@ func TestParse(t *testing.T) {
 
 			if !reflect.DeepEqual(result.Args, tt.expected.Args) {
 				t.Errorf("Args: got %v, expected %v", result.Args, tt.expected.Args)
-			}
-		})
-	}
-}
-
-func TestGetResourceDisplay(t *testing.T) {
-	tests := []struct {
-		name     string
-		cmd      *KubectlCommand
-		expected string
-	}{
-		{
-			name:     "resource with name",
-			cmd:      &KubectlCommand{Resource: "pod", Name: "nginx"},
-			expected: "pod/nginx",
-		},
-		{
-			name:     "resource without name",
-			cmd:      &KubectlCommand{Resource: "pods", Name: ""},
-			expected: "pods",
-		},
-		{
-			name:     "empty resource",
-			cmd:      &KubectlCommand{Resource: "", Name: ""},
-			expected: "<unknown>",
-		},
-		{
-			name:     "empty resource with name",
-			cmd:      &KubectlCommand{Resource: "", Name: "nginx"},
-			expected: "<unknown>",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.cmd.GetResourceDisplay()
-			if result != tt.expected {
-				t.Errorf("GetResourceDisplay() = %q, expected %q", result, tt.expected)
 			}
 		})
 	}
@@ -481,8 +420,8 @@ func TestLogsWithFollowFlag(t *testing.T) {
 	if result.Operation != "logs" {
 		t.Errorf("Operation = %q, expected %q", result.Operation, "logs")
 	}
-	if result.Resource != "nginx-pod" {
-		t.Errorf("Resource = %q, expected %q", result.Resource, "nginx-pod")
+	if firstTarget(result).Resource != "nginx-pod" {
+		t.Errorf("Resource = %q, expected %q", firstTarget(result).Resource, "nginx-pod")
 	}
 	// Should NOT have any file inputs
 	if len(result.FileInputs) != 0 {
@@ -529,11 +468,11 @@ func TestRolloutRestartParsing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Parse(tt.args)
 
-			if result.Resource != tt.expectedResource {
-				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			if firstTarget(result).Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", firstTarget(result).Resource, tt.expectedResource)
 			}
-			if result.Name != tt.expectedName {
-				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			if firstTarget(result).Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", firstTarget(result).Name, tt.expectedName)
 			}
 		})
 	}
@@ -541,9 +480,9 @@ func TestRolloutRestartParsing(t *testing.T) {
 
 func TestAllNamespacesFlag(t *testing.T) {
 	tests := []struct {
-		name              string
-		args              []string
-		expectedAllNS     bool
+		name          string
+		args          []string
+		expectedAllNS bool
 	}{
 		{"long flag", []string{"delete", "pods", "--all", "--all-namespaces"}, true},
 		{"short flag", []string{"delete", "pods", "--all", "-A"}, true},
@@ -617,11 +556,14 @@ func TestDoubleDashSeparator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Parse(tt.args)
 
-			if result.Resource != tt.expectedResource {
-				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			if len(result.Targets) != 1 {
+				t.Errorf("len(Targets) = %d, expected 1 (args after -- should be ignored)", len(result.Targets))
 			}
-			if result.Name != tt.expectedName {
-				t.Errorf("Name = %q, expected %q (args after -- should be ignored)", result.Name, tt.expectedName)
+			if firstTarget(result).Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", firstTarget(result).Resource, tt.expectedResource)
+			}
+			if firstTarget(result).Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q (args after -- should be ignored)", firstTarget(result).Name, tt.expectedName)
 			}
 		})
 	}
@@ -659,11 +601,14 @@ func TestKustomizeFlag(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Parse(tt.args)
 
-			if result.Resource != tt.expectedResource {
-				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			if len(result.Targets) != 0 {
+				t.Errorf("Targets = %v, expected none (-k path should not be parsed as a target)", result.Targets)
 			}
-			if result.Name != tt.expectedName {
-				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			if firstTarget(result).Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", firstTarget(result).Resource, tt.expectedResource)
+			}
+			if firstTarget(result).Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", firstTarget(result).Name, tt.expectedName)
 			}
 		})
 	}
@@ -713,11 +658,11 @@ func TestFlagsWithValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Parse(tt.args)
 
-			if result.Resource != tt.expectedResource {
-				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			if firstTarget(result).Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", firstTarget(result).Resource, tt.expectedResource)
 			}
-			if result.Name != tt.expectedName {
-				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			if firstTarget(result).Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", firstTarget(result).Name, tt.expectedName)
 			}
 		})
 	}
@@ -758,11 +703,11 @@ func TestSetCommandSubcommands(t *testing.T) {
 			if result.Operation != "set" {
 				t.Errorf("Operation = %q, expected %q", result.Operation, "set")
 			}
-			if result.Resource != tt.expectedResource {
-				t.Errorf("Resource = %q, expected %q", result.Resource, tt.expectedResource)
+			if firstTarget(result).Resource != tt.expectedResource {
+				t.Errorf("Resource = %q, expected %q", firstTarget(result).Resource, tt.expectedResource)
 			}
-			if result.Name != tt.expectedName {
-				t.Errorf("Name = %q, expected %q", result.Name, tt.expectedName)
+			if firstTarget(result).Name != tt.expectedName {
+				t.Errorf("Name = %q, expected %q", firstTarget(result).Name, tt.expectedName)
 			}
 		})
 	}
@@ -814,6 +759,125 @@ func TestGlobalFlagsWithEqualsSyntax(t *testing.T) {
 			}
 			if !reflect.DeepEqual(result.FileInputs, tt.expectedFileInput) {
 				t.Errorf("FileInputs = %v, expected %v", result.FileInputs, tt.expectedFileInput)
+			}
+		})
+	}
+}
+
+func TestParseMultipleTargets(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected []Target
+	}{
+		{
+			name: "delete one type many names",
+			args: []string{"delete", "secret", "cert-a", "cert-b", "cert-c", "cert-d"},
+			expected: []Target{
+				{Resource: "secret", Name: "cert-a"},
+				{Resource: "secret", Name: "cert-b"},
+				{Resource: "secret", Name: "cert-c"},
+				{Resource: "secret", Name: "cert-d"},
+			},
+		},
+		{
+			name: "delete slash-form multiple targets",
+			args: []string{"delete", "pod/a", "pod/b", "secret/c"},
+			expected: []Target{
+				{Resource: "pod", Name: "a"},
+				{Resource: "pod", Name: "b"},
+				{Resource: "secret", Name: "c"},
+			},
+		},
+		{
+			name: "comma-separated types without names",
+			args: []string{"delete", "pods,services", "-l", "app=nginx"},
+			expected: []Target{
+				{Resource: "pods"},
+				{Resource: "services"},
+			},
+		},
+		{
+			name: "comma types cross product with names",
+			args: []string{"delete", "pods,services", "foo", "bar"},
+			expected: []Target{
+				{Resource: "pods", Name: "foo"},
+				{Resource: "services", Name: "foo"},
+				{Resource: "pods", Name: "bar"},
+				{Resource: "services", Name: "bar"},
+			},
+		},
+		{
+			name: "flags interleaved between names",
+			args: []string{"delete", "secret", "cert-a", "-n", "istio-system", "cert-b"},
+			expected: []Target{
+				{Resource: "secret", Name: "cert-a"},
+				{Resource: "secret", Name: "cert-b"},
+			},
+		},
+		{
+			name:     "args after double dash ignored",
+			args:     []string{"exec", "nginx", "--", "/bin/sh", "-c", "ls"},
+			expected: []Target{{Resource: "nginx"}},
+		},
+		{
+			name:     "type-only selector form",
+			args:     []string{"delete", "pods", "-l", "app=nginx"},
+			expected: []Target{{Resource: "pods"}},
+		},
+		{
+			name:     "taint spec not treated as a name",
+			args:     []string{"taint", "nodes", "node-1", "key=value:NoSchedule"},
+			expected: []Target{{Resource: "nodes", Name: "node-1"}},
+		},
+		{
+			name:     "file input has no targets",
+			args:     []string{"apply", "-f", "deploy.yaml"},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse(tt.args)
+			if !reflect.DeepEqual(result.Targets, tt.expected) {
+				t.Errorf("Targets: got %v, expected %v", result.Targets, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetResourceDisplays(t *testing.T) {
+	tests := []struct {
+		name     string
+		cmd      *KubectlCommand
+		expected []string
+	}{
+		{
+			name: "multiple named targets",
+			cmd: &KubectlCommand{Targets: []Target{
+				{Resource: "secret", Name: "cert-a"},
+				{Resource: "secret", Name: "cert-b"},
+			}},
+			expected: []string{"secret/cert-a", "secret/cert-b"},
+		},
+		{
+			name:     "type-only target",
+			cmd:      &KubectlCommand{Targets: []Target{{Resource: "pods"}}},
+			expected: []string{"pods"},
+		},
+		{
+			name:     "no targets",
+			cmd:      &KubectlCommand{},
+			expected: []string{"<unknown>"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.cmd.GetResourceDisplays()
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("GetResourceDisplays() = %v, expected %v", result, tt.expected)
 			}
 		})
 	}
