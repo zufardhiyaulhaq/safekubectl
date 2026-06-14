@@ -320,3 +320,29 @@ func TestGetConfigPath(t *testing.T) {
 		}
 	})
 }
+
+func TestAuditFormatDefault(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Audit.Format != "text" {
+		t.Errorf("expected default audit format %q, got %q", "text", cfg.Audit.Format)
+	}
+}
+
+func TestAuditFormatFromYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	content := "audit:\n  enabled: true\n  format: json\n"
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	os.Setenv("SAFEKUBECTL_CONFIG", configPath)
+	defer os.Unsetenv("SAFEKUBECTL_CONFIG")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if cfg.Audit.Format != "json" {
+		t.Errorf("expected audit format %q, got %q", "json", cfg.Audit.Format)
+	}
+}

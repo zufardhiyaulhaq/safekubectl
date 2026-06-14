@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -517,5 +518,295 @@ func TestLogMultipleResources(t *testing.T) {
 
 	if !strings.Contains(string(content), "resources=[secret/cert-a,secret/cert-b]") {
 		t.Errorf("log entry missing resources list, got:\n%s", string(content))
+	}
+}
+
+func TestFormatText(t *testing.T) {
+	e := Entry{
+		Timestamp: "2026-06-14T10:38:14Z",
+		Status:    "EXECUTED",
+		Operation: "delete",
+		Resources: []string{"secret/cert-a", "secret/cert-b"},
+		Namespace: "istio-system",
+		Cluster:   "prod-cluster",
+		Confirmed: true,
+		Command:   "delete secret cert-a cert-b -n istio-system",
+	}
+
+	got := formatText(e)
+	want := `[2026-06-14T10:38:14Z] EXECUTED | operation=delete resources=[secret/cert-a,secret/cert-b] namespace=istio-system cluster=prod-cluster confirmed=true command="delete secret cert-a cert-b -n istio-system"`
+
+	if got != want {
+		t.Errorf("formatText():\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestFormatTextEmptyNamespace(t *testing.T) {
+	e := Entry{
+		Timestamp: "2026-06-14T10:38:14Z",
+		Status:    "EXECUTED",
+		Operation: "apply",
+		Resources: []string{"Deployment/nginx@istio-system"},
+		Namespace: "",
+		Cluster:   "prod-cluster",
+		Confirmed: true,
+		Command:   "apply -f deploy.yaml",
+	}
+
+	got := formatText(e)
+	if !strings.Contains(got, "resources=[Deployment/nginx@istio-system] namespace= cluster=prod-cluster") {
+		t.Errorf("formatText() with empty namespace, got: %s", got)
+	}
+}
+
+func TestFormatTextPreservesCommandQuotes(t *testing.T) {
+	e := Entry{
+		Timestamp: "2026-06-14T10:38:14Z",
+		Status:    "EXECUTED",
+		Operation: "patch",
+		Resources: []string{"deployment/nginx"},
+		Namespace: "default",
+		Cluster:   "test-cluster",
+		Confirmed: true,
+		Command:   `patch deployment nginx -p {"spec":{"replicas":3}}`,
+	}
+
+	got := formatText(e)
+	if !strings.Contains(got, `command="patch deployment nginx -p {"spec":{"replicas":3}}"`) {
+		t.Errorf("formatText() must preserve unescaped quotes, got: %s", got)
+	}
+}
+
+func TestFormatJSON(t *testing.T) {
+	e := Entry{
+		Timestamp: "2026-06-14T10:38:14Z",
+		Status:    "DENIED",
+		Operation: "delete",
+		Resources: []string{"secret/cert-a", "secret/cert-b"},
+		Namespace: "istio-system",
+		Cluster:   "prod-cluster",
+		Confirmed: false,
+		Command:   "delete secret cert-a cert-b -n istio-system",
+	}
+
+	got, err := formatJSON(e)
+	if err != nil {
+		t.Fatalf("formatJSON() returned error: %v", err)
+	}
+
+	if strings.Contains(got, "\n") {
+		t.Errorf("formatJSON() must not contain a newline, got: %s", got)
+	}
+
+	var decoded Entry
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("formatJSON() produced invalid JSON: %v\n%s", err, got)
+	}
+
+	if decoded.Status != "DENIED" {
+		t.Errorf("status: got %q, want %q", decoded.Status, "DENIED")
+	}
+	if decoded.Operation != "delete" {
+		t.Errorf("operation: got %q, want %q", decoded.Operation, "delete")
+	}
+	if len(decoded.Resources) != 2 || decoded.Resources[0] != "secret/cert-a" || decoded.Resources[1] != "secret/cert-b" {
+		t.Errorf("resources: got %v", decoded.Resources)
+	}
+	if decoded.Namespace != "istio-system" {
+		t.Errorf("namespace: got %q", decoded.Namespace)
+	}
+	if decoded.Cluster != "prod-cluster" {
+		t.Errorf("cluster: got %q", decoded.Cluster)
+	}
+	if decoded.Confirmed {
+		t.Errorf("confirmed: got true, want false")
+	}
+	if decoded.Command != "delete secret cert-a cert-b -n istio-system" {
+		t.Errorf("command: got %q", decoded.Command)
+	}
+}
+
+func TestFormatJSONKeys(t *testing.T) {
+	e := Entry{Timestamp: "t", Status: "EXECUTED", Operation: "delete"}
+	got, err := formatJSON(e)
+	if err != nil {
+		t.Fatalf("formatJSON() error: %v", err)
+	}
+	for _, key := range []string{
+		`"timestamp"`, `"status"`, `"operation"`, `"resources"`,
+		`"namespace"`, `"cluster"`, `"confirmed"`, `"command"`,
+	} {
+		if !strings.Contains(got, key) {
+			t.Errorf("formatJSON() missing key %s, got: %s", key, got)
+		}
+	}
+}
+
+func TestLogJSONFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+			Format:  "json",
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.CheckResult{
+		Operation: "delete",
+		Resources: []string{"secret/cert-a", "secret/cert-b"},
+		Namespace: "istio-system",
+		Cluster:   "prod-cluster",
+	}
+
+	if err := logger.Log(result, []string{"delete", "secret", "cert-a", "cert-b", "-n", "istio-system"}, true, true); err != nil {
+		t.Fatalf("Log() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	line := strings.TrimSpace(string(content))
+	var e Entry
+	if err := json.Unmarshal([]byte(line), &e); err != nil {
+		t.Fatalf("log line is not valid JSON: %v\n%s", err, line)
+	}
+
+	if e.Status != "EXECUTED" {
+		t.Errorf("status: got %q, want EXECUTED", e.Status)
+	}
+	if e.Operation != "delete" {
+		t.Errorf("operation: got %q, want delete", e.Operation)
+	}
+	if len(e.Resources) != 2 {
+		t.Errorf("resources: got %v, want 2 entries", e.Resources)
+	}
+	if e.Namespace != "istio-system" {
+		t.Errorf("namespace: got %q, want istio-system", e.Namespace)
+	}
+	if !e.Confirmed {
+		t.Errorf("confirmed: got false, want true")
+	}
+}
+
+func TestLogResourcesJSONFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+			Format:  "json",
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.ResourceCheckResult{
+		Operation: "apply",
+		Cluster:   "prod-cluster",
+		Resources: []manifest.Resource{
+			{Kind: "Deployment", Name: "nginx", Namespace: "production"},
+		},
+	}
+
+	if err := logger.LogResources(result, []string{"apply", "-f", "deploy.yaml"}, true, true); err != nil {
+		t.Fatalf("LogResources() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	line := strings.TrimSpace(string(content))
+	var e Entry
+	if err := json.Unmarshal([]byte(line), &e); err != nil {
+		t.Fatalf("log line is not valid JSON: %v\n%s", err, line)
+	}
+
+	if e.Namespace != "" {
+		t.Errorf("namespace: got %q, want empty for file-based path", e.Namespace)
+	}
+	if len(e.Resources) != 1 || e.Resources[0] != "Deployment/nginx@production" {
+		t.Errorf("resources: got %v, want [Deployment/nginx@production]", e.Resources)
+	}
+}
+
+func TestLogResourcesTextUnified(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+			Format:  "text",
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.ResourceCheckResult{
+		Operation: "apply",
+		Cluster:   "prod-cluster",
+		Resources: []manifest.Resource{
+			{Kind: "Deployment", Name: "nginx", Namespace: "production"},
+		},
+	}
+
+	if err := logger.LogResources(result, []string{"apply", "-f", "deploy.yaml"}, true, true); err != nil {
+		t.Fatalf("LogResources() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	if !strings.Contains(string(content), "resources=[Deployment/nginx@production] namespace= cluster=prod-cluster") {
+		t.Errorf("file-based text line not in unified layout, got:\n%s", string(content))
+	}
+}
+
+func TestLogUnknownFormatFallsBackToText(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	cfg := &config.Config{
+		Audit: config.AuditConfig{
+			Enabled: true,
+			Path:    logPath,
+			Format:  "yaml", // unrecognized → must fall back to text
+		},
+	}
+
+	logger := New(cfg)
+	result := &checker.CheckResult{
+		Operation: "delete",
+		Resources: []string{"pod/nginx"},
+		Namespace: "default",
+		Cluster:   "test-cluster",
+	}
+
+	if err := logger.Log(result, []string{"delete", "pod", "nginx"}, true, true); err != nil {
+		t.Fatalf("Log() returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	line := strings.TrimSpace(string(content))
+	if strings.HasPrefix(line, "{") {
+		t.Errorf("unknown format should produce text, got JSON: %s", line)
+	}
+	if !strings.Contains(line, "operation=delete resources=[pod/nginx]") {
+		t.Errorf("unknown format did not produce text layout, got: %s", line)
 	}
 }

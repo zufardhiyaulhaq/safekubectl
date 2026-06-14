@@ -32,3 +32,5 @@ protectedClusters:
 audit:
   enabled: false
   path: ~/.safekubectl/audit.log
+  # Output format: "text" (default) or "json" (JSON Lines, one object per line)
+  format: text

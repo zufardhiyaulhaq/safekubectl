@@ -19,6 +19,7 @@ const (
 type AuditConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path"`
+	Format  string `yaml:"format"` // "text" (default) or "json"
 }
 
 // Config holds the safekubectl configuration
@@ -54,6 +55,7 @@ func DefaultConfig() *Config {
 		Audit: AuditConfig{
 			Enabled: false,
 			Path:    filepath.Join(homeDir, ".safekubectl", "audit.log"),
+			Format:  "text",
 		},
 	}
 }
